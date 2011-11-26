@@ -1,4 +1,5 @@
 #include "State.h"
+#include <stdlib.h>
 
 using namespace std;
 
@@ -20,6 +21,7 @@ State::~State()
 void State::setup()
 {
     grid = vector<vector<Square> >(rows, vector<Square>(cols, Square()));
+    srand(seed);
 };
 
 //resets all non-water squares to land and clears the bots ant vector
