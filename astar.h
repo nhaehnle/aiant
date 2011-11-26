@@ -9,7 +9,7 @@
 struct BaseAStar {
 	BaseAStar(State & state) :
 		m_state(state),
-		m_map(state),
+		m_map(state.rows, state.cols),
 		m_queue(MyCompare(*this))
 	{
 	}

@@ -6,7 +6,8 @@
 using namespace std;
 
 //constructor
-Bot::Bot()
+Bot::Bot() :
+	m_zoc(state)
 {
 
 }
@@ -18,6 +19,8 @@ void Bot::playGame()
 	cin >> state;
 	state.setup();
 	endTurn();
+
+	m_zoc.init();
 
 	//continues making moves while the game is not over
 	while(cin >> state)
@@ -132,7 +135,7 @@ bool Bot::try_rotate_move(uint antidx, const Map<bool> & claims)
 
 void Bot::make_moves()
 {
-	Map<bool> claimed(state);
+	Map<bool> claimed(state.rows, state.cols);
 
 	for (uint foodidx = 0; foodidx < m_foods.size(); ++foodidx)
 		claimed[m_foods[foodidx].where] = true;
@@ -185,6 +188,8 @@ void Bot::makeMoves()
 	state.bug << "turn " << state.turn << ":" << endl;
 	state.bug << state << endl;
 
+	m_zoc.update();
+
 	//
 	m_ants.clear();
 	m_ants.reserve(state.myAnts.size());
@@ -215,23 +220,33 @@ void Bot::makeMoves()
 		state.bug << "ant " << antidx << " at " << ant.where << endl;
 
 		if (ant.hasfood) {
+			// assigned to a food source, go there
 			if (ant.food.distance > 1) {
 				ant.goal = ant.food.where;
 				ant.direction = ant.food.direction;
 			}
 		} else {
-			for (int d = 0; d < TDIRECTIONS; d++) {
-				Location loc = state.getLocation(ant.where, d);
+			static int rotate = 0;
+			rotate = (rotate + 1) % TDIRECTIONS;
+
+			// not looking for food, go towards enemy territory
+			uint my = m_zoc.m_enemy[ant.where];
+			for (int predir = 0; predir < TDIRECTIONS; predir++) {
+				int dir = (predir + rotate) % TDIRECTIONS;
+				Location loc = state.getLocation(ant.where, dir);
 
 				if (!state.grid[loc.row][loc.col].isWater) {
-					ant.goal = loc;
-					ant.direction = d;
-					break;
+					if (m_zoc.m_enemy[loc] < my) {
+						state.bug << "  zoc move " << cdir(dir) << endl;
+						ant.goal = loc;
+						ant.direction = dir;
+						break;
+					}
 				}
 			}
 		}
 
-		state.bug << "  goal " << ant.goal << " dir " << ((ant.direction >= 0) ? CDIRECTIONS[ant.direction] : '-') << endl;
+		state.bug << "  goal " << ant.goal << " dir " << cdir(ant.direction) << endl;
 	}
 
 	//

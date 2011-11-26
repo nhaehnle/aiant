@@ -3,6 +3,7 @@
 
 #include "State.h"
 #include "map.h"
+#include "zoc.h"
 
 struct Food {
 	Location where;
@@ -50,6 +51,7 @@ struct Bot
 	bool try_rotate_move(uint antidx, const Map<bool> & claims);
 	void make_moves();
 
+	Zoc m_zoc;
 	std::vector<Ant> m_ants;
 	std::vector<Food> m_foods;
 };
