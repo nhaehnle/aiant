@@ -15,6 +15,8 @@ struct BaseAStar {
 	}
 
 	void clear() {
+		while (!m_queue.empty())
+			m_queue.pop();
 		m_map.fill(Field());
 	}
 
@@ -51,13 +53,13 @@ protected:
 		Field() : state(BLACK), backlink(-1) {}
 	};
 
+	typedef std::pair<Location, int32_t> QueuePair;
+
 	struct MyCompare {
 		MyCompare(const BaseAStar & astar) : m_astar(astar) {}
 
-		bool operator()(const Location & a, const Location & b) const {
-			const Field & fa = m_astar.m_map[a];
-			const Field & fb = m_astar.m_map[b];
-			return fa.cost + fa.estimate > fb.cost + fb.estimate;
+		bool operator()(const QueuePair & a, const QueuePair & b) const {
+			return a.second > b.second;
 		}
 
 		const BaseAStar & m_astar;
@@ -65,7 +67,7 @@ protected:
 
 	State & m_state;
 	Map<Field> m_map;
-	std::priority_queue<Location, std::vector<Location>, MyCompare> m_queue;
+	std::priority_queue<Location, std::vector<QueuePair>, MyCompare> m_queue;
 };
 
 struct LocationEvalZero {
@@ -103,11 +105,11 @@ struct AStar : BaseAStar {
 			f.cost = cost;
 			f.estimate = m_loceval(pos);
 			f.backlink = backlink;
-			m_queue.push(pos);
+			m_queue.push(std::make_pair(pos, f.cost + f.estimate));
 		} else if (f.state == Field::GREY && cost < f.cost) {
 			f.cost = cost;
 			f.backlink = backlink;
-			m_queue.push(pos);
+			m_queue.push(std::make_pair(pos, f.cost + f.estimate));
 		}
 	}
 
@@ -116,9 +118,9 @@ struct AStar : BaseAStar {
 		do {
 			if (m_queue.empty())
 				return false;
-			pos = m_queue.top();
+			pos = m_queue.top().first;
 			m_queue.pop();
-		} while (m_map[pos].state == Field::WHITE);
+		} while (m_map[pos].state != Field::GREY);
 
 		Field & f = m_map[pos];
 		cost = f.cost;
