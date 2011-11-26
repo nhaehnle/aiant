@@ -2,6 +2,7 @@
 #define BOT_H_
 
 #include "State.h"
+#include "map.h"
 
 struct Food {
 	Location where;
@@ -46,6 +47,7 @@ struct Bot
 	uint foodidx_at(const Location & pos);
 
 	void assign_food();
+	bool try_rotate_move(uint antidx, const Map<bool> & claims);
 	void make_moves();
 
 	std::vector<Ant> m_ants;

@@ -24,6 +24,7 @@ const char CDIRECTIONS[4] = {'N', 'E', 'S', 'W'};
 const int DIRECTIONS[4][2] = { {-1, 0}, {0, 1}, {1, 0}, {0, -1} };      //{N, E, S, W}
 
 inline int reversedir(int dir) {return (dir + 2) % 4;}
+inline char cdir(int dir) {return (dir >= 0) ? CDIRECTIONS[dir] : '-';}
 
 /*
     struct to store current state information

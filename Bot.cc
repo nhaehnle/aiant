@@ -67,15 +67,12 @@ void Bot::assign_food()
 		for (uint foodidx = 0; foodidx < m_foods.size(); ++foodidx) {
 			if (!m_foods[foodidx].claimed) {
 				astar.push(m_foods[foodidx].where);
-				state.bug << "push " << m_foods[foodidx].where << endl;
 			}
 		}
 
 		Location where;
 		int32_t cost;
 		while (astar.step(where, cost)) {
-			state.bug << "step " << where << " " << cost << endl;
-
 			if (cost > 3 * state.viewradius)
 				return;
 
@@ -105,12 +102,79 @@ void Bot::assign_food()
 	}
 }
 
+bool Bot::try_rotate_move(uint antidx, const Map<bool> & claims)
+{
+	static int rotate = 1;
+	if (rotate == 1)
+		rotate = TDIRECTIONS - 1;
+	else
+		rotate = 1;
+
+	Ant & ant = m_ants[antidx];
+	int altdir = (ant.direction + rotate) % TDIRECTIONS;
+	Location moveto = state.getLocation(ant.where, altdir);
+
+	state.bug << "  try altdir " << cdir(altdir) << " to " << moveto << endl;
+
+	if (!claims[moveto] && !state.grid[moveto.row][moveto.col].isWater) {
+		Location next = state.getLocation(moveto, ant.direction);
+		if (!state.grid[next.row][next.col].isWater) {
+			ant.direction = altdir;
+			state.bug << "  ok" << endl;
+			return true;
+		}
+	}
+
+	state.bug << "  nope" << endl;
+
+	return false;
+}
+
 void Bot::make_moves()
 {
+	Map<bool> claimed(state);
+
+	for (uint foodidx = 0; foodidx < m_foods.size(); ++foodidx)
+		claimed[m_foods[foodidx].where] = true;
+
 	for (uint antidx = 0; antidx < m_ants.size(); ++antidx) {
 		Ant & ant = m_ants[antidx];
+		Location moveto;
+
+		moveto = ant.where;
 		if (ant.direction >= 0)
+			moveto = state.getLocation(moveto, ant.direction);
+
+		state.bug << "ant at " << ant.where << " initial attempt " << moveto << " dir " << cdir(ant.direction) << endl;
+
+		if (claimed[moveto] && (ant.direction < 0 || !try_rotate_move(antidx, claimed))) {
+			if (!claimed[ant.where]) {
+				state.bug << "  current pos unclaimed" << endl;
+				ant.direction = -1;
+			} else {
+				state.bug << "  rotate" << endl;
+				static int rotate = 0;
+				rotate = (rotate + 1) % TDIRECTIONS;
+				for (int predir = 0; predir < TDIRECTIONS; ++predir) {
+					int dir = (predir + rotate) % TDIRECTIONS;
+					moveto = state.getLocation(ant.where, dir);
+					if (!claimed[moveto]) {
+						ant.direction = dir;
+						break;
+					}
+				}
+			}
+		}
+
+		state.bug << "  move " << cdir(ant.direction) << endl;
+
+		if (ant.direction >= 0) {
+			moveto = state.getLocation(ant.where, ant.direction);
+			claimed[moveto] = true;
 			state.makeMove(ant.where, ant.direction);
+		} else {
+			claimed[ant.where] = true;
+		}
 	}
 }
 
