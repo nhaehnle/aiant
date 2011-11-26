@@ -1,7 +1,8 @@
 CC=g++
 CFLAGS=-Wall -O3 -funroll-loops -c
 LDFLAGS=-O2 -lm
-SOURCES=Bot.cc MyBot.cc State.cc
+SOURCES=$(wildcard *.cc)
+HEADERS=$(wildcard *.h)
 OBJECTS=$(addsuffix .o, $(basename ${SOURCES}))
 EXECUTABLE=MyBot
 
@@ -13,7 +14,7 @@ all: $(OBJECTS) $(EXECUTABLE)
 $(EXECUTABLE): $(OBJECTS)
 	$(CC) $(LDFLAGS) $(OBJECTS) -o $@
 
-.cc.o: *.h
+%.o: %.cc $(HEADERS)
 	$(CC) $(CFLAGS) $< -o $@
 
 clean:

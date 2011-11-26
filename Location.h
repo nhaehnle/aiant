@@ -6,18 +6,26 @@
 */
 struct Location
 {
-    int row, col;
+	int row, col;
 
-    Location()
-    {
-        row = col = 0;
-    };
+	Location()
+	{
+		row = col = 0;
+	}
 
-    Location(int r, int c)
-    {
-        row = r;
-        col = c;
-    };
+	Location(int r, int c)
+	{
+		row = r;
+		col = c;
+	}
+
+	bool operator==(const Location & o) const {
+		return row == o.row && col == o.col;
+	}
 };
+
+inline std::ostream & operator<<(std::ostream & out, const Location & loc) {
+	return out << loc.row << ", " << loc.col;
+}
 
 #endif //LOCATION_H_
