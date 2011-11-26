@@ -115,11 +115,13 @@ void Zoc::update()
 		}
 	}
 
-	print();
+	//print();
 }
 
 void Zoc::print()
 {
+	state.bug << "ZOC data" << endl;
+
 	Location cur;
 	for (cur.row = 0; cur.row < state.rows; ++cur.row) {
 		for (cur.col = 0; cur.col < state.cols; ++cur.col) {
