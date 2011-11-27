@@ -1,12 +1,15 @@
 #ifndef TACTICAL_H
 #define TACTICAL_H
 
+#include <stdlib.h>
+
 struct Bot;
 struct Location;
+struct Outcome;
+struct PlayerMove;
+struct Scenarios;
 struct Submap;
 struct State;
-
-static const unsigned int TacticalProximity = 6;
 
 struct Tactical {
 	Tactical(Bot & bot_);
@@ -16,6 +19,11 @@ struct Tactical {
 
 	int evaluate(const Submap & sm);
 	void make_moves(const Location & center);
+
+	void generate_moves(Scenarios & scn, const Location & offset, bool predefined);
+	bool evaluate_new_moves(Scenarios & scn);
+	void improve(Scenarios & scn, uint myidx, uint enemyidx);
+	void apply_moves(Submap & sm, const PlayerMove & me, const PlayerMove & enemy, Outcome & outcome);
 
 	Bot & bot;
 	State & state;
