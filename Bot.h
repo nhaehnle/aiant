@@ -24,10 +24,12 @@ struct Ant {
 	bool hasfood;
 	PointOfInterest food;
 
+	bool hastactical;
+
 	Location goal;
 	int direction;
 
-	Ant() : hasfood(false) {}
+	Ant() : hasfood(false), hastactical(false) {}
 };
 
 /*

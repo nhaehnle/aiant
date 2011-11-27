@@ -2,6 +2,7 @@
 
 #include "Bot.h"
 #include "astar.h"
+#include "tactical.h"
 
 using namespace std;
 
@@ -191,12 +192,19 @@ void Bot::makeMoves()
 	m_zoc.update();
 
 	//
+	bool havetactical = false;
 	m_ants.clear();
 	m_ants.reserve(state.myAnts.size());
 	for (uint antidx = 0; antidx < state.myAnts.size(); ++antidx) {
 		m_ants.push_back(Ant());
 		Ant & ant = m_ants.back();
 		ant.where = state.myAnts[antidx];
+
+		if (!havetactical && m_zoc.m_enemy[ant.where] <= TacticalProximity) {
+			Tactical tactical(*this);
+			tactical.make_moves(ant.where);
+			havetactical = true;
+		}
 	}
 
 	//
