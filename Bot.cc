@@ -306,7 +306,7 @@ void Bot::makeMoves()
 	//
 	make_moves();
 
-	state.bug << "time taken: " << state.timer.getTime() << "ms" << endl << endl;
+	state.bug.time << "time taken in turn " << state.turn << ": " << state.timer.getTime() << "ms" << endl << endl;
 }
 
 //finishes the turn
