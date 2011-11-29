@@ -373,7 +373,7 @@ struct Outcome {
 						} else if (enemyfield & PlayerMove::AttackMask) {
 							map[local] = '>';
 						} else {
-							map[local] = ' ';
+							map[local] = '.';
 						}
 					}
 				}
@@ -588,8 +588,12 @@ struct NewMove {
 
 	~NewMove()
 	{
-		if (!shouldcommit)
+		if (!shouldcommit) {
 			d.mymoves.pop_back();
+			state.bug << "Abort new move " << d.mymoves.size() << endl;
+		} else {
+			state.bug << "Commit new move " << (d.mymoves.size() - 1) << endl;
+		}
 	}
 
 	PlayerMove & move() {return d.mymoves.back();}
@@ -955,6 +959,8 @@ struct Improve {
 		if (d.myants.empty())
 			return;
 
+		state.bug << "check whether we can send ants to kill " << enemyantidx << " at " << enemypos << endl;
+
 		uint additionalidx[NrAttackNeighboursUpperBound];
 		int additionaldir[NrAttackNeighboursUpperBound];
 		uint additionalvalue[NrAttackNeighboursUpperBound];
@@ -970,7 +976,10 @@ struct Improve {
 			const Location & orig = d.myants[myantidx];
 			const Location & current = mymove.antmoves[myantidx].pos;
 
+			state.bug << "  consider ant " << myantidx << " at " << current << " (from " << orig << ")" << endl;
+
 			if (d.basesm.eucliddist2(current, enemypos) <= AttackRadius2) {
+				state.bug << "    already attacking" << endl;
 				// already attacking the target
 				bestattacker = min(bestattacker, uint(enemymove.map[current] & PlayerMove::AttackMask));
 				continue;
@@ -978,6 +987,8 @@ struct Improve {
 
 			if (d.basesm.eucliddist2(orig, enemypos) > AttackNeighboursRadius2)
 				continue; // too far away
+
+			state.bug << "  close enough" << endl;
 
 			int bestdirection = -1;
 			uint bestvalue = numeric_limits<uint>::max();
@@ -992,12 +1003,16 @@ struct Improve {
 				if (d.basesm[n] & Submap::Water)
 					continue;
 
+				state.bug << "  consider moving to " << n << " " << cdir(dir) << endl;
+
 				uint value = enemymove.map[n] & PlayerMove::AttackMask;
 				if (value < bestvalue) {
 					bestvalue = value;
 					bestdirection = dir;
 				}
 			}
+
+			state.bug << "  best choice: " << cdir(bestdirection) << " attackers " << bestvalue << endl;
 
 			additionalidx[nradditional] = myantidx;
 			additionaldir[nradditional] = bestdirection;
@@ -1010,6 +1025,7 @@ struct Improve {
 
 		NewMove nm(t, myidx, why);
 		for (uint idx = 0; idx < nradditional; ++idx) {
+			state.bug << idx << " nrattackers vs. bestattacker " << nrattackers << " " << bestattacker << endl;
 			if (nrattackers > bestattacker)
 				break;
 
@@ -1024,9 +1040,14 @@ struct Improve {
 			if (nm.move().map[n] & PlayerMove::AntsMask)
 				continue;
 
+			state.bug << "moving " << myantidx << " to " << n << endl;
+
 			nm.antmove(myantidx, dir);
 			bestattacker = min(bestattacker, additionalvalue[idx]);
+			nrattackers++;
 		}
+
+		state.bug << "final nrattackers " << nrattackers << " vs " << bestattacker << endl;
 
 		if (nrattackers >= bestattacker) {
 			nm.commit();
@@ -1041,6 +1062,7 @@ struct Improve {
 
 			if (enemyant.collided || enemyant.killed || enemyant.sentoffense)
 				continue;
+
 			if (d.basesm.eucliddist2(enemyant.pos, Location(Submap::Radius, Submap::Radius)) > TacticalMidRadius2)
 				continue;
 
@@ -1060,6 +1082,7 @@ struct Improve {
 
 		//
 		if (themymove().nrcollided) {
+			state.bug << "avoid collisions" << endl;
 			avoid_collisions();
 		}
 
