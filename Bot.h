@@ -29,7 +29,7 @@ struct Ant {
 	Location goal;
 	int direction;
 
-	Ant() : hasfood(false), hastactical(false) {}
+	Ant() : hasfood(false), hastactical(false), direction(-1) {}
 };
 
 /*

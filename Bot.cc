@@ -6,9 +6,9 @@
 
 using namespace std;
 
-static const unsigned int TacticalClose = 3;
-static const unsigned int TacticalMid = 4;
-static const unsigned int TacticalFar = 6;
+static const unsigned int TacticalClose = 2;
+static const unsigned int TacticalMid = 3;
+static const unsigned int TacticalFar = 5;
 
 
 //constructor
@@ -197,54 +197,12 @@ void Bot::makeMoves()
 	m_zoc.update();
 
 	//
-	vector<uint> tactical_close;
-	vector<uint> tactical_mid;
-	vector<uint> tactical_far;
-
 	m_ants.clear();
 	m_ants.reserve(state.myAnts.size());
 	for (uint antidx = 0; antidx < state.myAnts.size(); ++antidx) {
 		m_ants.push_back(Ant());
 		Ant & ant = m_ants.back();
 		ant.where = state.myAnts[antidx];
-
-		uint enemydist = m_zoc.m_enemy[ant.where];
-		if (!ant.hastactical && enemydist <= TacticalFar) {
-			if (enemydist <= TacticalClose)
-				tactical_close.push_back(antidx);
-			else if (enemydist <= TacticalMid)
-				tactical_mid.push_back(antidx);
-			else
-				tactical_far.push_back(antidx);
-		}
-	}
-
-	//
-	while (!tactical_close.empty()) {
-		Ant & ant = m_ants[tactical_close.back()];
-		tactical_close.pop_back();
-		if (!ant.hastactical) {
-			Tactical tactical(*this);
-			tactical.make_moves(ant.where);
-		}
-	}
-
-	while (!tactical_mid.empty()) {
-		Ant & ant = m_ants[tactical_mid.back()];
-		tactical_mid.pop_back();
-		if (!ant.hastactical) {
-			Tactical tactical(*this);
-			tactical.make_moves(ant.where);
-		}
-	}
-
-	while (!tactical_far.empty()) {
-		Ant & ant = m_ants[tactical_far.back()];
-		tactical_far.pop_back();
-		if (!ant.hastactical) {
-			Tactical tactical(*this);
-			tactical.make_moves(ant.where);
-		}
 	}
 
 	//
@@ -267,9 +225,7 @@ void Bot::makeMoves()
 
 		state.bug << "ant " << antidx << " at " << ant.where << endl;
 
-		if (ant.hastactical) {
-			state.bug << "  tactical move " << cdir(ant.direction) << endl;
-		} else if (ant.hasfood) {
+		if (ant.hasfood) {
 			// assigned to a food source, go there
 			if (ant.food.distance > 1) {
 				ant.goal = ant.food.where;
@@ -297,6 +253,54 @@ void Bot::makeMoves()
 		}
 
 		state.bug << "  goal " << ant.goal << " dir " << cdir(ant.direction) << endl;
+	}
+
+	//
+	vector<uint> tactical_close;
+	vector<uint> tactical_mid;
+	vector<uint> tactical_far;
+
+	for (uint antidx = 0; antidx < state.myAnts.size(); ++antidx) {
+		Ant & ant = m_ants[antidx];
+		uint enemydist = m_zoc.m_enemy[ant.goal];
+		if (enemydist <= TacticalFar) {
+			if (enemydist <= TacticalClose)
+				tactical_close.push_back(antidx);
+			else if (enemydist <= TacticalMid)
+				tactical_mid.push_back(antidx);
+			else
+				tactical_far.push_back(antidx);
+		}
+	}
+
+	while (!tactical_close.empty()) {
+		Ant & ant = m_ants[tactical_close.back()];
+		tactical_close.pop_back();
+		if (!ant.hastactical) {
+			Tactical tactical(*this);
+			tactical.make_moves(ant.where);
+			ant.hastactical = true;
+		}
+	}
+
+	while (!tactical_mid.empty()) {
+		Ant & ant = m_ants[tactical_mid.back()];
+		tactical_mid.pop_back();
+		if (!ant.hastactical) {
+			Tactical tactical(*this);
+			tactical.make_moves(ant.where);
+			ant.hastactical = true;
+		}
+	}
+
+	while (!tactical_far.empty()) {
+		Ant & ant = m_ants[tactical_far.back()];
+		tactical_far.pop_back();
+		if (!ant.hastactical) {
+			Tactical tactical(*this);
+			tactical.make_moves(ant.where);
+			ant.hastactical = true;
+		}
 	}
 
 	//
