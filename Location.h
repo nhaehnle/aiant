@@ -22,6 +22,7 @@ struct Location
 	bool operator==(const Location & o) const {
 		return row == o.row && col == o.col;
 	}
+	bool operator!=(const Location & o) const {return !(*this == o);}
 };
 
 inline std::ostream & operator<<(std::ostream & out, const Location & loc) {

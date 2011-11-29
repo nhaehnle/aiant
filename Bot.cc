@@ -262,7 +262,7 @@ void Bot::makeMoves()
 
 	for (uint antidx = 0; antidx < state.myAnts.size(); ++antidx) {
 		Ant & ant = m_ants[antidx];
-		uint enemydist = m_zoc.m_enemy[ant.goal];
+		uint enemydist = m_zoc.m_enemy[ant.where];
 		if (enemydist <= TacticalFar) {
 			if (enemydist <= TacticalClose)
 				tactical_close.push_back(antidx);

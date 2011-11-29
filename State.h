@@ -53,7 +53,7 @@ const int DIRPERMUTATIONS[24][4] = {
 	{ 3, 2, 1, 0 },
 };
 
-const int OPTDIRPERMUTATIONS[24][5] = {
+const int OPTDIRPERMUTATIONS[120][5] = {
 	{ -1, 0, 1, 2, 3 },
 	{ -1, 0, 1, 3, 2 },
 	{ -1, 0, 2, 1, 3 },
@@ -183,11 +183,11 @@ inline uint32_t fastrng() {
 	return rngstate;
 }
 
-inline int * getdirperm() {
+inline const int * getdirperm() {
 	return DIRPERMUTATIONS[fastrng() % 24];
 }
 
-inline int * getoptdirperm() {
+inline const int * getoptdirperm() {
 	return OPTDIRPERMUTATIONS[fastrng() % 120];
 }
 

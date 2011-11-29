@@ -17,13 +17,14 @@ using namespace std;
 //@{
 static const int MaxFoodDistance = 16;
 static const int FoodFactor = 10;
-static const int MaxFoodSeekers = 2;
 static const int MaxZocValue = 16;
 static const int ZocFactor = 1;
+static const int HillValue = 300;
 
 static const int ValueKill = 5000;
 static const int ValueLoss = -6000;
 static const int ValueEat = 1000;
+static const int ValueUselessDeath = -1500;
 
 static const uint MaxEval = 50; ///< max number of moves to evaluate
 static const uint MaxIdleDist2 = 10;
@@ -43,8 +44,8 @@ static const bool AttackKernel[AttackKernelSize][AttackKernelSize] = {
 	{ false, true,  true,  true,  false },
 };
 
-static const int AttackRadius2 = 5;
-static const int AttackNeighboursRadius2 = 10;
+static const uint AttackRadius2 = 5;
+static const uint AttackNeighboursRadius2 = 10;
 static const int NrAttackNeighboursUpperBound = 49;
 
 template<typename T>
@@ -58,28 +59,36 @@ struct BaseSubmap {
 		for (uint idx = 0; idx < Size * Size; ++idx)
 			map[idx] = c;
 	}
-	T & operator[](const Location & pos) {return map[pos.row * Size + pos.col];}
-	const T & operator[](const Location & pos) const {return map[pos.row * Size + pos.col];}
-	bool getneighbour(Location local, int direction, Location & out) const {
+	static bool inside(const Location & pos) {
+		return pos.row >= 0 && pos.row < Size && pos.col >= 0 && pos.col < Size;
+	}
+	T & operator[](const Location & pos) {
+		assert(inside(pos));
+		return map[pos.row * Size + pos.col];
+	}
+	const T & operator[](const Location & pos) const {
+		assert(inside(pos));
+		return map[pos.row * Size + pos.col];
+	}
+	static bool getneighbour(Location local, int direction, Location & out) {
 		out.row = local.row + DIRECTIONS[direction][0];
 		out.col = local.col + DIRECTIONS[direction][1];
-		return out.row >= 0 && out.row < Size && out.col >= 0 && out.col < Size;
+		return inside(out);
 	}
-	bool getneighbouropt(Location local, int direction, Location & out) const {
+	static bool getneighbouropt(Location local, int direction, Location & out) {
 		if (direction >= 0) {
 			out.row = local.row + DIRECTIONS[direction][0];
 			out.col = local.col + DIRECTIONS[direction][1];
-			return out.row >= 0 && out.row < Size && out.col >= 0 && out.col < Size;
 		} else {
 			out = local;
-			return true;
 		}
+		return inside(out);
 	}
-	uint manhattandist(const Location & a, const Location & b) const {
+	static uint manhattandist(const Location & a, const Location & b) {
 		return abs(a.row - b.row) + abs(a.col - b.col);
 	}
 
-	uint eucliddist2(const Location & a, const Location & b) const {
+	static uint eucliddist2(const Location & a, const Location & b) {
 		int dr = a.row - b.row;
 		int dc = a.col - b.col;
 		return (dr * dr) + (dc * dc);
@@ -105,6 +114,9 @@ struct Submap : BaseSubmap<uint8_t> {
 	}
 };
 
+const uint8_t Submap::Mine; // must be the two least significant bits
+const uint8_t Submap::Enemy;
+
 ostream & operator<<(ostream & out, const Submap & sm)
 {
 	Location cur;
@@ -117,14 +129,14 @@ ostream & operator<<(ostream & out, const Submap & sm)
 				out << '*';
 			} else if (field & Submap::Hill) {
 				if (field & Submap::Mine)
-					out << 'A';
+					out << 'H';
 				else
-					out << 'B';
+					out << 'h';
 			} else if (field & Submap::Ant) {
 				if (field & Submap::Mine)
-					out << 'a';
+					out << 'A';
 				else
-					out << 'b';
+					out << 'a';
 			} else {
 				out << ' ';
 			}
@@ -144,10 +156,8 @@ static void add_enemy_kernel(Submap & sm, const Location & center, int delta)
 
 			Location other
 				((center.row + kernel.row - AttackKernelRadius),
-				 (center.col + kernel.col - AttackKernelRadius);
-			if
-				(other.row < 0 || other.row >= Submap::Size ||
-				 other.col < 0 || other.col >= Submap::Size)
+				 (center.col + kernel.col - AttackKernelRadius));
+			if (!sm.inside(other))
 				continue;
 
 			sm[other] += delta;
@@ -166,16 +176,19 @@ struct PlayerMove {
 		uint8_t killed : 1;
 		uint8_t sentoffense : 1;
 
-		AntMove(const Location & p, int8_t dir) : pos(p), direction(dir), collided(0), collider(0), override(0) {}
+		AntMove(const Location & p, int8_t dir) :
+			pos(p), direction(dir),
+			collided(0), collider(0), override(0), killed(0), sentoffense(0)
+		{}
 	};
 
 	vector<AntMove> antmoves;
 	uint hash;
 	uint nrcollided;
 
-	static uint8_t AntsMask = 0xc0;
-	static uint8_t AntsShift = 5;
-	static uint8_t AttackMask = 0x1f;
+	static const uint8_t AntsMask = 0xc0;
+	static const uint8_t AntsShift = 5;
+	static const uint8_t AttackMask = 0x1f;
 	Submap map;
 
 	int worstvalue;
@@ -183,6 +196,7 @@ struct PlayerMove {
 
 	PlayerMove() {
 		hash = 0;
+		nrcollided = 0;
 		worstvalue = numeric_limits<int>::max();
 		worstopposingidx = -1;
 	}
@@ -197,7 +211,7 @@ struct PlayerMove {
 		// assume: direction and pos already set
 		AntMove & am = antmoves[idx];
 
-		if (am.pos.row < 0 || am.pos.row >= Submap::Size || am.pos.col < 0 || am.pos.col >= Submap::Size)
+		if (!map.inside(am.pos))
 			return;
 
 		uint prevnrants = map[am.pos] >> AntsShift;
@@ -211,7 +225,7 @@ struct PlayerMove {
 			add_enemy_kernel(map, am.pos, -1);
 			for (uint other = 0; other < antmoves.size(); ++other) {
 				AntMove & otherm = antmoves[other];
-				if (other == idx || other.pos != otherm.pos)
+				if (other == idx || am.pos != otherm.pos)
 					continue;
 				otherm.collided = 1;
 			}
@@ -229,7 +243,7 @@ struct PlayerMove {
 		// assume: direction and pos still set
 		AntMove & am = antmoves[idx];
 
-		if (am.pos.row < 0 || am.pos.row >= Submap::Size || am.pos.col < 0 || am.pos.col >= Submap::Size)
+		if (!map.inside(am.pos))
 			return;
 
 		uint prevnrants = map[am.pos] >> AntsShift;
@@ -241,7 +255,7 @@ struct PlayerMove {
 		} else if (prevnrants == 2) {
 			for (uint other = 0; other < antmoves.size(); ++other) {
 				AntMove & otherm = antmoves[other];
-				if (other == idx || other.pos != otherm.pos)
+				if (other == idx || am.pos != otherm.pos)
 					continue;
 
 				add_enemy_kernel(map, am.pos, 1);
@@ -254,7 +268,7 @@ struct PlayerMove {
 			if (!am.collider) {
 				for (uint other = 0; other < antmoves.size(); ++other) {
 					AntMove & otherm = antmoves[other];
-					if (other == idx || other.pos != otherm.pos)
+					if (other == idx || am.pos != otherm.pos)
 						continue;
 
 					otherm.collider = 0;
@@ -323,6 +337,80 @@ struct Tactical::Data {
 
 };
 
+struct Outcome {
+	Tactical::Data & d;
+	BaseSubmap<char> map;
+
+	Outcome(Tactical & t, int myidx, int enemyidx) : d(t.d) {
+		Location local;
+		for (local.row = 0; local.row < Submap::Size; ++local.row) {
+			for (local.col = 0; local.col < Submap::Size; ++local.col) {
+				unsigned char field = d.basesm[local];
+
+				if (field & Submap::Water) {
+					map[local] = '%';
+				} else if (field & Submap::Food) {
+					map[local] = '*';
+				} else if (field & Submap::Hill) {
+					if (field & Submap::Mine)
+						map[local] = 'H';
+					else
+						map[local] = 'h';
+				} else {
+					uint8_t myfield = d.mymoves[myidx].map[local];
+					uint8_t enemyfield = d.enemymoves[enemyidx].map[local];
+
+					if (myfield & PlayerMove::AntsMask) {
+						map[local] = 'Q' + (myfield >> PlayerMove::AntsShift);
+					} else if (enemyfield & PlayerMove::AntsMask) {
+						map[local] = 'q' + (enemyfield >> PlayerMove::AntsShift);
+					} else {
+						if (myfield & PlayerMove::AttackMask) {
+							if (enemyfield & PlayerMove::AttackMask)
+								map[local] = '+';
+							else
+								map[local] = '<';
+						} else if (enemyfield & PlayerMove::AttackMask) {
+							map[local] = '>';
+						} else {
+							map[local] = ' ';
+						}
+					}
+				}
+			}
+		}
+
+		markmove(d.mymoves[myidx], "ADC");
+		markmove(d.enemymoves[enemyidx], "adc");
+	}
+
+	void markmove(PlayerMove & move, const char * markers) {
+		for (uint antidx = 0; antidx < move.antmoves.size(); ++antidx) {
+			PlayerMove::AntMove & am = move.antmoves[antidx];
+			if (!d.basesm.inside(am.pos))
+				continue;
+
+			if (am.collided)
+				map[am.pos] = markers[2];
+			else if (am.killed)
+				map[am.pos] = markers[1];
+			else
+				map[am.pos] = markers[0];
+		}
+	}
+};
+
+ostream & operator<<(ostream & out, const Outcome & outcome) {
+	Location local;
+	for (local.row = 0; local.row < Submap::Size; ++local.row) {
+		for (local.col = 0; local.col < Submap::Size; ++local.col) {
+			out << outcome.map[local];
+		}
+		out << endl;
+	}
+	return out;
+}
+
 Tactical::Tactical(Bot & bot_) :
 	bot(bot_),
 	state(bot_.state),
@@ -332,7 +420,7 @@ Tactical::Tactical(Bot & bot_) :
 
 Tactical::~Tactical()
 {
-	delete *d;
+	delete &d;
 }
 
 void Tactical::gensubmap_field(Submap & sm, const Location & local, const Location & global)
@@ -420,87 +508,10 @@ void Tactical::compute_foodpotential(const Submap & sm, BaseSubmap<uint> & poten
 	}
 }
 
-void Tactical::evaluate_food(const Submap & sm, int & myvalue, int & enemyvalue)
-{
-	Location food;
-	for (food.row = 0; food.row < Submap::Size; ++food.row) {
-		for (food.col = 0; food.col < Submap::Size; ++food.col) {
-			if (!(sm[food] & Submap::Food))
-				continue;
-
-			Location queue[Submap::Size * Submap::Size];
-			uint queue_head = 0;
-			uint queue_tail = 0;
-			Submap thispotential;
-			uint myfound = 0;
-			uint enemyfound = 0;
-
-			thispotential.fill(0);
-			thispotential[food] = MaxFoodDistance;
-			queue[queue_tail++] = food;
-
-			while (queue_head < queue_tail) {
-				Location cur = queue[queue_head++];
-
-				if (sm[cur] & Submap::Ant) {
-					if (sm[cur] & Submap::Enemy) {
-						enemyfound++;
-						enemyvalue += thispotential[cur] * FoodFactor / enemyfound;
-					} else {
-						myfound++;
-						myvalue += thispotential[cur] * FoodFactor / myfound;
-					}
-					if (enemyfound >= MaxFoodSeekers && myfound >= MaxFoodSeekers)
-						break;
-				}
-
-				if (thispotential[cur] > 1) {
-					for (int dir = 0; dir < TDIRECTIONS; ++dir) {
-						Location n;
-						if (!sm.getneighbour(cur, dir, n))
-							continue;
-						if (sm[n] & Submap::Water || thispotential[n] > 0)
-							continue;
-
-						thispotential[n] = thispotential[cur] - 1;
-						queue[queue_tail++] = n;
-					}
-				}
-			}
-		}
-	}
-}
-
-
-/**
- * Evaluate the given submap according to some simple and hopefully cheap evaluation function.
- */
-void Tactical::evaluate(const Submap & sm, int & myvalue, int & enemyvalue)
-{
-	evaluate_food(sm, myvalue, enemyvalue);
-
-	Location local;
-	for (local.row = 0; local.row < Submap::Size; ++local.row) {
-		for (local.col = 0; local.col < Submap::Size; ++local.col) {
-			if (sm[local] & Submap::Ant) {
-				Location global
-					((local.row + d.offset.row) % state.rows,
-					 (local.col + d.offset.col) % state.cols);
-
-				if (sm[local] & Submap::Enemy) {
-					enemyvalue += (MaxZocValue - min(bot.m_zoc.m_me[global], MaxZocValue)) * ZocFactor;
-				} else {
-					myvalue += (MaxZocValue - min(bot.m_zoc.m_enemy[global], MaxZocValue)) * ZocFactor;
-				}
-			}
-		}
-	}
-}
-
 struct CloserToCenterCompare {
 	bool operator()(const Location & a, const Location & b) const {
-		uint a2 = Submap::eucliddist2(a, Location(Submap::Radius, Submap::Radius);
-		uint b2 = Submap::eucliddist2(b, Location(Submap::Radius, Submap::Radius);
+		uint a2 = Submap::eucliddist2(a, Location(Submap::Radius, Submap::Radius));
+		uint b2 = Submap::eucliddist2(b, Location(Submap::Radius, Submap::Radius));
 		return a2 < b2;
 	}
 };
@@ -509,6 +520,8 @@ void Tactical::generate_initmoves()
 {
 	d.mymoves.push_back(PlayerMove());
 	d.enemymoves.push_back(PlayerMove());
+	d.mymoves[0].map.fill(0);
+	d.enemymoves[0].map.fill(0);
 
 	// collect all ants and sort by distance to center
 	Location local;
@@ -554,18 +567,10 @@ void Tactical::generate_initmoves()
 	// Finalize the moves
 	d.mymoves[0].computehash();
 	d.enemymoves[0].computehash();
+
+	state.bug << "Init moves" << endl;
+	state.bug << Outcome(*this, 0, 0);
 }
-
-
-struct Outcome {
-	int myvalue;
-	int enemyvalue;
-
-	Location newpositions[Submap::Size * Submap::Size];
-	uint nrnewpositions;
-
-	Outcome() : myvalue(0), enemyvalue(0) {}
-};
 
 struct NewMove {
 	NewMove(Tactical & t_, uint myidxbase, const char * why) :
@@ -597,6 +602,8 @@ struct NewMove {
 		PlayerMove::AntMove & am = pm.antmoves[myantidx];
 		am.direction = direction;
 		d.basesm.getneighbouropt(d.myants[myantidx], direction, am.pos);
+		am.override = 1;
+
 		pm.ant_mark(myantidx);
 	}
 
@@ -659,7 +666,7 @@ struct Improve {
 
 		for (uint myantidx = 0; myantidx < mymove.antmoves.size(); ++myantidx) {
 			PlayerMove::AntMove & am = mymove.antmoves[myantidx];
-			if (am.collided)
+			if (am.collided || !d.basesm.inside(am.pos))
 				continue;
 
 			am.sentoffense = 0;
@@ -671,7 +678,7 @@ struct Improve {
 
 			for (uint enemyantidx = 0; enemyantidx < enemymove.antmoves.size(); ++enemyantidx) {
 				const PlayerMove::AntMove & em = enemymove.antmoves[enemyantidx];
-				if (em.collided)
+				if (em.collided || !d.basesm.inside(em.pos))
 					continue;
 
 				Location kernel
@@ -701,7 +708,7 @@ struct Improve {
 
 		for (uint enemyantidx = 0; enemyantidx < enemymove.antmoves.size(); ++enemyantidx) {
 			PlayerMove::AntMove & am = enemymove.antmoves[enemyantidx];
-			if (am.collided)
+			if (am.collided || !d.basesm.inside(am.pos))
 				continue;
 
 			am.sentoffense = 0;
@@ -713,7 +720,7 @@ struct Improve {
 
 			for (uint myantidx = 0; myantidx < mymove.antmoves.size(); ++myantidx) {
 				const PlayerMove::AntMove & em = mymove.antmoves[myantidx];
-				if (em.collided)
+				if (em.collided || !d.basesm.inside(em.pos))
 					continue;
 
 				Location kernel
@@ -740,7 +747,10 @@ struct Improve {
 		const PlayerMove & mymove = themymove();
 		const PlayerMove & enemymove = theenemymove();
 
-		for (uint myantidx = 0; myantidx < mymove.antmoves.size(); ++myantidx) {
+		uint p = getprime();
+		uint ofs = fastrng() % mymove.antmoves.size();
+		for (uint preidx = 0; preidx < mymove.antmoves.size(); ++preidx) {
+			uint myantidx = (p * preidx + ofs) % mymove.antmoves.size();
 			const PlayerMove::AntMove & am = mymove.antmoves[myantidx];
 			if (!am.collider)
 				continue;
@@ -760,8 +770,8 @@ struct Improve {
 			int olddir = am.direction;
 			if (olddir == -1) {
 				int altdir = -1;
-				int * dirperm = getdirperm();
-				for (uint predir = 0; predir < TDIRECTIONS; ++predir) {
+				const int * dirperm = getdirperm();
+				for (int predir = 0; predir < TDIRECTIONS; ++predir) {
 					int dir = dirperm[predir];
 					checkacceptable(found1);
 				}
@@ -801,6 +811,79 @@ struct Improve {
 		}
 	}
 
+	bool pushmove(NewMove & nm, uint myantidx, int direction)
+	{
+		// This has a bias towards retreating away from the enemy
+		for (int iters = 0; iters < 5; ++iters) {
+			PlayerMove::AntMove & am = nm.move().antmoves[myantidx];
+			nm.antmove(myantidx, direction);
+
+			if (!am.collided) {
+				state.bug << "pushmove success in iter " << iters << endl;
+				return true;
+			}
+
+			uint p = getprime();
+			uint ofs = fastrng() % d.myants.size();
+			for (uint preidx = 0; preidx < d.myants.size(); ++preidx) {
+				uint otheridx = (p * preidx + ofs) % d.myants.size();
+				PlayerMove::AntMove & otherm = nm.move().antmoves[otheridx];
+
+				if (otheridx == myantidx && otherm.pos != am.pos)
+					continue;
+
+				int allfreedirection = -2;
+				int collisiondirection = -2;
+				int attackeddirection = -2;
+
+#define check_candidate(dir) \
+	do { \
+		Location n; \
+		if (!d.basesm.getneighbouropt(otherm.pos, (dir), n)) break; \
+		if (d.basesm[n] & Submap::Water) break; \
+		bool collision = nm.move().map[n] & PlayerMove::AntsMask; \
+		bool attacked = theenemymove().map[n] & PlayerMove::AttackMask; \
+		if (!collision && !attacked) { \
+			allfreedirection = dir; \
+			goto found; \
+		} else if (!attacked) { \
+			if (collisiondirection <= -2) collisiondirection = dir; \
+		} else if (!collision) { \
+			if (attackeddirection <= -2) attackeddirection = dir; \
+		} \
+	} while(0)
+
+				int altdir = (direction + 1 + (fastrng() & 2)) % TDIRECTIONS;
+
+				check_candidate(direction);
+
+				if (altdir != otherm.direction)
+					check_candidate(altdir);
+
+				altdir = (altdir + 2) % TDIRECTIONS;
+				if (altdir != otherm.direction)
+					check_candidate(altdir);
+
+				if (-1 != otherm.direction)
+					check_candidate(-1);
+
+			found:
+				if (allfreedirection >= -1)
+					direction = allfreedirection;
+				else if (collisiondirection >= -1)
+					direction = collisiondirection;
+				else if (attackeddirection >= -1)
+					direction = attackeddirection;
+
+				myantidx = otheridx;
+				break;
+			}
+		}
+
+		state.bug << "pushmove failed" << endl;
+		return false;
+	}
+
 	void do_retreat()
 	{
 		for (uint idx = 0; idx < deaths.size(); ++idx) {
@@ -813,7 +896,7 @@ struct Improve {
 			int origdir = mymove.antmoves[death.myantidx].direction;
 			int alt1dir = origdir;
 			int alt2dir = origdir;
-			int * optdirperm = getoptdirperm();
+			const int * optdirperm = getoptdirperm();
 			for (int predir = 0; predir < TDIRECTIONS+1; ++predir) {
 				int dir = optdirperm[predir];
 				if (dir == origdir)
@@ -847,12 +930,12 @@ struct Improve {
 
 			if (alt1dir != origdir) {
 				NewMove nm(t, myidx, "retreat: unattacked field");
-				if (nm.antmove(death.myantidx, alt1dir, NewMove::PushRetreat))
+				if (pushmove(nm, death.myantidx, alt1dir))
 					nm.commit();
 			}
 			if (alt2dir != origdir && alt2dir != alt1dir) {
 				NewMove nm(t, myidx, "retreat: get away from killer");
-				if (nm.antmove(death.myantidx, alt2dir, NewMove::PushRetreat))
+				if (pushmove(nm, death.myantidx, alt2dir))
 					nm.commit();
 			}
 		}
@@ -860,15 +943,22 @@ struct Improve {
 
 	void send_to_kill(uint enemyantidx, const char * why)
 	{
-		const PlayerMove & mymove = themymove();
-		const PlayerMove & enemymove = theenemymove();
-		const PlayerMove::AntMove & enemyant = enemymove.antmoves[enemyantidx];
+		PlayerMove & mymove = themymove();
+		PlayerMove & enemymove = theenemymove();
+		PlayerMove::AntMove & enemyant = enemymove.antmoves[enemyantidx];
 		Location enemypos = enemyant.pos;
+
+		enemymove.antmoves[enemyantidx].sentoffense = 1;
+
+		if (!d.basesm.inside(enemypos))
+			return;
+		if (d.myants.empty())
+			return;
 
 		uint additionalidx[NrAttackNeighboursUpperBound];
 		int additionaldir[NrAttackNeighboursUpperBound];
 		uint additionalvalue[NrAttackNeighboursUpperBound];
-		uint nradditional;
+		uint nradditional = 0;
 
 		uint nrattackers = mymove.map[enemypos] & PlayerMove::AttackMask;
 		uint bestattacker = numeric_limits<uint>::max();
@@ -882,7 +972,7 @@ struct Improve {
 
 			if (d.basesm.eucliddist2(current, enemypos) <= AttackRadius2) {
 				// already attacking the target
-				bestattacker = min(bestattacker, enemymove.map[current] & PlayerMove::AttackMask);
+				bestattacker = min(bestattacker, uint(enemymove.map[current] & PlayerMove::AttackMask));
 				continue;
 			}
 
@@ -891,7 +981,7 @@ struct Improve {
 
 			int bestdirection = -1;
 			uint bestvalue = numeric_limits<uint>::max();
-			int * optdirperm = getoptdirperm();
+			const int * optdirperm = getoptdirperm();
 			for (int predir = 0; predir < TDIRECTIONS + 1; ++predir) {
 				int dir = optdirperm[predir];
 				Location n;
@@ -911,7 +1001,7 @@ struct Improve {
 
 			additionalidx[nradditional] = myantidx;
 			additionaldir[nradditional] = bestdirection;
-			additionalvalue[nradditional] = additionalvalue;
+			additionalvalue[nradditional] = bestvalue;
 			nradditional++;
 		}
 
@@ -939,7 +1029,6 @@ struct Improve {
 		}
 
 		if (nrattackers >= bestattacker) {
-			theenemymove().antmoves[enemyantidx].sentoffense = 1;
 			nm.commit();
 		}
 	}
@@ -961,16 +1050,18 @@ struct Improve {
 
 	void do_improve()
 	{
-		t.state.bug << "improve " << myidx << " vs " << enemyidx
+		state.bug << "improve " << myidx << " vs " << enemyidx
 			<< " perspective: " << (d.ismyperspective ? "mine" : "enemy") << endl;
+
+		//
+		compute_deaths();
+
+		state.bug << Outcome(t, myidx, enemyidx);
 
 		//
 		if (themymove().nrcollided) {
 			avoid_collisions();
 		}
-
-		//
-		compute_deaths();
 
 		if (!deaths.empty()) {
 			// if one of ours is killed, see if we can retreat
@@ -995,171 +1086,100 @@ void Tactical::improve(uint myidx, uint enemyidx)
 	imp.do_improve();
 }
 
-void Tactical::apply_moves(Submap & sm, const PlayerMove & me, const PlayerMove & enemy, Outcome & outcome)
+int Tactical::evaluate_ant_positions(PlayerMove & mymove, bool myperspective)
 {
-	// place moves
-	for (uint amidx = 0; amidx < me.antmoves.size(); ++amidx) {
-		const AntMove & am = me.antmoves[amidx];
-		Location newpos;
-		if (!sm.getneighbouropt(am.pos, am.direction, newpos))
+	int value = 0;
+	uint8_t enemyflag = myperspective ? Submap::Enemy : Submap::Mine;
+
+	for (uint antidx = 0; antidx < mymove.antmoves.size(); ++antidx) {
+		PlayerMove::AntMove & am = mymove.antmoves[antidx];
+		if (am.collided || am.killed)
 			continue;
 
-		unsigned char & field = sm[newpos];
-		if ((field & (Submap::AntCollision | Submap::AntMoved)) == 0) {
-			field &= ~Submap::Enemy;
-			field |= Submap::AntMoved | Submap::Mine;
+		Location global
+			((am.pos.row + d.offset.row) % state.rows,
+			 (am.pos.col + d.offset.col) % state.cols);
+
+		if (!myperspective) {
+			value += (MaxZocValue - min(bot.m_zoc.m_me[global], uint(MaxZocValue))) * ZocFactor;
 		} else {
-			if (!(field & Submap::AntCollision)) {
-				field |= Submap::AntCollision;
-				outcome.myvalue += ValueLoss;
-			}
-			outcome.myvalue += ValueLoss;
-		}
-	}
-
-	for (uint amidx = 0; amidx < enemy.antmoves.size(); ++amidx) {
-		const AntMove & am = enemy.antmoves[amidx];
-		Location newpos;
-		if (!sm.getneighbouropt(am.pos, am.direction, newpos))
-			continue;
-
-		unsigned char & field = sm[newpos];
-		if ((field & (Submap::AntCollision | Submap::AntMoved)) == 0) {
-			field &= ~Submap::Mine;
-			field |= Submap::AntMoved | Submap::Enemy;
-		} else {
-			if (!(field & Submap::AntCollision)) {
-				field |= Submap::AntCollision;
-				outcome.enemyvalue += ValueLoss;
-			}
-			outcome.enemyvalue += ValueLoss;
-		}
-	}
-
-	// update ant positions
-	Location newpositions[Submap::Size * Submap::Size];
-	uint nrnewpositions = 0;
-
-	Location cur;
-	for (cur.row = 0; cur.row < Submap::Size; ++cur.row) {
-		for (cur.col = 0; cur.col < Submap::Size; ++cur.col) {
-			unsigned char & field = sm[cur];
-			if ((field & (Submap::AntMoved | Submap::AntCollision)) == Submap::AntMoved) {
-				field |= Submap::Ant;
-
-				newpositions[nrnewpositions++] = cur;
-			} else {
-				field &= ~Submap::Ant;
-			}
-			field &= ~(Submap::AntMoved | Submap::AntCollision);
-		}
-	}
-
-	// compute number of nearby enemies
-	Submap enemies;
-
-	for (uint idx = 0; idx < nrnewpositions; ++idx) {
-		Location cur = newpositions[idx];
-		unsigned char ownership = sm[cur] & (Submap::Mine | Submap::Enemy);
-
-		int count = 0;
-		Location kernel;
-		for (kernel.row = 0; kernel.row < AttackKernelSize; ++kernel.row) {
-			for (kernel.col = 0; kernel.col < AttackKernelSize; ++kernel.col) {
-				if (!AttackKernel[kernel.row][kernel.col])
-					continue;
-
-				Location other
-					(cur.row + kernel.row - AttackKernelRadius,
-					 cur.col + kernel.col - AttackKernelRadius);
-				if
-					(other.row < 0 || other.row >= Submap::Size ||
-					 other.col < 0 || other.col >= Submap::Size)
-					continue;
-
-				unsigned char otherfield = sm[other];
-				if (otherfield & Submap::Ant) {
-					if ((otherfield & (Submap::Mine | Submap::Enemy)) != ownership)
-						count++;
-				}
-			}
+			value += (MaxZocValue - min(bot.m_zoc.m_enemy[global], uint(MaxZocValue))) * ZocFactor;
 		}
 
-		enemies[cur] = count;
-	}
+		if (d.basesm.inside(am.pos)) {
+			value += d.foodpotential[am.pos] * FoodFactor;
 
-	// compute killed ants
-	Location killants[Submap::Size * Submap::Size];
-	uint nrkillants = 0;
-
-	for (uint idx = 0; idx < nrnewpositions; ++idx) {
-		Location cur = newpositions[idx];
-		unsigned char ownership = sm[cur] & (Submap::Mine | Submap::Enemy);
-
-		Location kernel;
-		for (kernel.row = 0; kernel.row < AttackKernelSize; ++kernel.row) {
-			for (kernel.col = 0; kernel.col < AttackKernelSize; ++kernel.col) {
-				if (!AttackKernel[kernel.row][kernel.col])
-					continue;
-
-				Location other
-					((cur.row + kernel.row + state.rows - AttackKernelRadius) % state.rows,
-					 (cur.col + kernel.col + state.cols - AttackKernelRadius) % state.cols);
-				if
-					(other.row < 0 || other.row >= Submap::Size ||
-					 other.col < 0 || other.col >= Submap::Size)
-					continue;
-
-				unsigned char otherfield = sm[other];
-				if (!(otherfield & Submap::Ant) || (otherfield & (Submap::Mine | Submap::Enemy)) == ownership)
-					continue;
-
-				if (enemies[cur] >= enemies[other]) {
-					killants[nrkillants++] = cur;
-					goto killed;
-				}
-			}
+			if ((d.basesm[am.pos] & (Submap::Hill | enemyflag)) == (Submap::Hill | enemyflag))
+				value += HillValue;
 		}
-	killed: ;
-	}
-
-	// reap ants
-	for (uint idx = 0; idx < nrkillants; ++idx) {
-		Location cur = killants[idx];
-		unsigned char & field = sm[cur];
-
-		if (field & Submap::Mine) {
-			outcome.myvalue += ValueLoss;
-			outcome.enemyvalue += ValueKill;
-		} else {
-			outcome.myvalue += ValueKill;
-			outcome.enemyvalue += ValueLoss;
-		}
-
-		field &= ~(Submap::Ant | Submap::AntCollision | Submap::AntMoved);
-	}
-
-	// eat food
-	for (uint idx = 0; idx < nrnewpositions; ++idx) {
-		Location cur = killants[idx];
-		unsigned char field = sm[cur];
-		if (!(field & Submap::Ant))
-			continue;
 
 		for (int dir = 0; dir < TDIRECTIONS; ++dir) {
 			Location n;
-			if (!sm.getneighbour(cur, dir, n))
+			if (!d.basesm.getneighbour(am.pos, dir, n))
 				continue;
 
-			unsigned char & nfield = sm[cur];
-			if (nfield & Submap::Food) {
-				nfield &= ~Submap::Food;
+			if ((d.basesm[n] & (Submap::Hill | enemyflag)) == (Submap::Hill | enemyflag))
+				value += HillValue;
+		}
+	}
 
-				if (field & Submap::Enemy)
-					outcome.enemyvalue += ValueEat;
-				else
-					outcome.myvalue += ValueEat;
-			}
+	return value;
+}
+
+
+void Tactical::compute_deaths(PlayerMove & mymove, PlayerMove & enemymove, int & mydeaths, int & enemydeaths)
+{
+	for (uint myantidx = 0; myantidx < mymove.antmoves.size(); ++myantidx) {
+		PlayerMove::AntMove & am = mymove.antmoves[myantidx];
+		if (am.collided || !d.basesm.inside(am.pos))
+			continue;
+
+		am.killed = 0;
+
+		uint nrenemies = enemymove.map[am.pos] & PlayerMove::AttackMask;
+		if (nrenemies == 0)
+			continue;
+
+		for (uint enemyantidx = 0; enemyantidx < enemymove.antmoves.size(); ++enemyantidx) {
+			const PlayerMove::AntMove & em = enemymove.antmoves[enemyantidx];
+			if (em.collided || !d.basesm.inside(em.pos))
+				continue;
+
+			if (d.basesm.eucliddist2(em.pos, am.pos) > AttackRadius2)
+				continue;
+			if ((mymove.map[em.pos] & PlayerMove::AttackMask) > nrenemies)
+				continue;
+
+			am.killed = 1;
+			mydeaths++;
+			break;
+		}
+	}
+
+	for (uint enemyantidx = 0; enemyantidx < enemymove.antmoves.size(); ++enemyantidx) {
+		PlayerMove::AntMove & am = enemymove.antmoves[enemyantidx];
+		if (am.collided || !d.basesm.inside(am.pos))
+			continue;
+
+		am.killed = 0;
+
+		uint nrenemies = mymove.map[am.pos] & PlayerMove::AttackMask;
+		if (nrenemies == 0)
+			continue;
+
+		for (uint myantidx = 0; myantidx < mymove.antmoves.size(); ++myantidx) {
+			const PlayerMove::AntMove & em = mymove.antmoves[myantidx];
+			if (em.collided || !d.basesm.inside(em.pos))
+				continue;
+
+			if (d.basesm.eucliddist2(am.pos, em.pos) > AttackRadius2)
+				continue;
+			if ((enemymove.map[em.pos] & PlayerMove::AttackMask) > nrenemies)
+				continue;
+
+			am.killed = 1;
+			enemydeaths++;
+			break;
 		}
 	}
 }
@@ -1180,30 +1200,41 @@ bool Tactical::evaluate_new_moves()
 			int myvalue = mymove.nrcollided * ValueLoss;
 			int enemyvalue = enemymove.nrcollided * ValueLoss;
 
-			Submap sm(scn.basesm);
-			apply_moves(sm, mymove, enemymove, outcome);
+			int mydeaths = 0;
+			int enemydeaths = 0;
+			compute_deaths(mymove, enemymove, mydeaths, enemydeaths);
 
-			int value = evaluate(sm);
-			outcome.myvalue += value;
-			outcome.enemyvalue -= value;
+			myvalue += mydeaths * ValueLoss + enemydeaths * ValueKill;
+			if ((mydeaths || mymove.nrcollided) && !enemydeaths)
+				myvalue += ValueUselessDeath;
+
+			enemyvalue += mydeaths * ValueKill + enemydeaths * ValueLoss;
+			if ((enemydeaths || enemymove.nrcollided) && !mydeaths)
+				myvalue += ValueUselessDeath;
+
+			int myposvalue = evaluate_ant_positions(mymove, true);
+			int enemyposvalue = evaluate_ant_positions(enemymove, false);
+
+			myvalue += myposvalue - enemyposvalue;
+			enemyvalue += enemyposvalue - myposvalue;
 
 			state.bug << " " << myidx << " vs. " << enemyidx
-				<< "  value " << outcome.myvalue << " vs " << outcome.enemyvalue << endl;
-			state.bug << sm;
+				<< "  value " << myvalue << " vs " << enemyvalue << endl;
+			state.bug << Outcome(*this, myidx, enemyidx);
 
-			if (outcome.myvalue < mymove.worstvalue) {
-				mymove.worstvalue = outcome.myvalue;
+			if (myvalue < mymove.worstvalue) {
+				mymove.worstvalue = myvalue;
 				mymove.worstopposingidx = enemyidx;
 			}
-			if (outcome.enemyvalue < enemymove.worstvalue) {
-				enemymove.worstvalue = outcome.enemyvalue;
+			if (enemyvalue < enemymove.worstvalue) {
+				enemymove.worstvalue = enemyvalue;
 				enemymove.worstopposingidx = myidx;
 			}
 		}
 	}
 
-	scn.myevaluated = scn.mymoves.size();
-	scn.enemyevaluated = scn.enemymoves.size();
+	d.myevaluated = d.mymoves.size();
+	d.enemyevaluated = d.enemymoves.size();
 	return true;
 }
 
@@ -1211,6 +1242,7 @@ void Tactical::make_moves(const Location & center)
 {
 	d.ismyperspective = true;
 	gensubmap(d.basesm, center);
+	compute_foodpotential(d.basesm, d.foodpotential);
 	d.offset = Location
 		((center.row - Submap::Radius + state.rows) % state.rows,
 		 (center.col - Submap::Radius + state.cols) % state.cols);
@@ -1219,7 +1251,6 @@ void Tactical::make_moves(const Location & center)
 	d.enemyevaluated = 0;
 
 	state.bug << "Tactical around " << center << endl;
-	state.bug << d.basesm;
 
 	generate_initmoves();
 
@@ -1240,7 +1271,8 @@ void Tactical::make_moves(const Location & center)
 		improve(mybestidx, mybestenemyidx);
 		d.flipsides();
 		improve(mybestenemyidx, mybestidx);
-		improve(enemybestidx, enemybestmyidx);
+		if (enemybestidx != mybestenemyidx || enemybestmyidx != mybestidx)
+			improve(enemybestidx, enemybestmyidx);
 		d.flipsides();
 	}
 
@@ -1251,7 +1283,7 @@ void Tactical::make_moves(const Location & center)
 	state.bug << "Best move " << bestmoveidx << endl;
 
 	for (uint idx = 0; idx < move.antmoves.size(); ++idx) {
-		int dir = move.antmoves[idx];
+		int dir = move.antmoves[idx].direction;
 		Location antpos = d.myants[idx];
 		Location global
 			((antpos.row + d.offset.row) % state.rows,
@@ -1259,12 +1291,15 @@ void Tactical::make_moves(const Location & center)
 		uint antidx = bot.myantidx_at(global);
 		Ant & ant = bot.m_ants[antidx];
 
-		if (move.override[idx])
-			ant.hastactical = true;
-		ant.direction = -1;
+		assert(move.antmoves[idx].override || ant.direction == dir);
+
+		ant.direction = dir;
 		ant.goal = state.getLocation(ant.where, dir);
 
-		state.bug << "  Ant at " << ant.where
-			<< " tactical move to " << ant.goal << " (" << cdir(ant.direction) << ")" << endl;
+		if (move.antmoves[idx].override) {
+			ant.hastactical = true;
+			state.bug << "  Ant at " << ant.where
+				<< " tactical move to " << ant.goal << " (" << cdir(ant.direction) << ")" << endl;
+		}
 	}
 }
