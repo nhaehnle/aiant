@@ -15,8 +15,6 @@ struct Zoc {
 	void init();
 	void update();
 
-	void print();
-
 	State & state;
 	Map<uint> m_me;
 	Map<uint> m_enemy;

@@ -24,6 +24,38 @@ void Zoc::init()
 	m_enemy.fill(0);
 }
 
+ostream & operator<<(ostream & out, const Zoc & zoc)
+{
+	Location cur;
+	for (cur.row = 0; cur.row < zoc.state.rows; ++cur.row) {
+		for (cur.col = 0; cur.col < zoc.state.cols; ++cur.col) {
+			const Square & sq = zoc.state.grid[cur.row][cur.col];
+			if (sq.isWater)
+				out << '%';
+			else if (sq.hillPlayer >= 0)
+				out << (char)('A' + sq.hillPlayer);
+			else if (sq.ant >= 0)
+				out << (char)('a' + sq.ant);
+			else if (sq.isFood)
+				out << '*';
+			else {
+				int diff = zoc.m_enemy[cur] - zoc.m_me[cur];
+				if (diff > 5)
+					out << ' ';
+				else if (diff > 0)
+					out << '.';
+				else if (diff > -2)
+					out << '+';
+				else
+					out << '@';
+			}
+		}
+		out << endl;
+	}
+
+	return out;
+}
+
 void Zoc::update()
 {
 	std::vector<Location> oldenemies;
@@ -115,34 +147,6 @@ void Zoc::update()
 		}
 	}
 
-	//print();
-}
-
-void Zoc::print()
-{
-	state.bug << "ZOC data" << endl;
-
-	Location cur;
-	for (cur.row = 0; cur.row < state.rows; ++cur.row) {
-		for (cur.col = 0; cur.col < state.cols; ++cur.col) {
-			if (state.grid[cur.row][cur.col].isWater) {
-				state.bug << '%';
-				continue;
-			}
-			if (m_enemy[cur] == 0) {
-				state.bug << '@';
-			} else {
-				int diff = m_enemy[cur] - m_me[cur];
-				if (diff > 5)
-					state.bug << ' ';
-				else if (diff > 0)
-					state.bug << '.';
-				else if (diff > -2)
-					state.bug << '+';
-				else
-					state.bug << '*';
-			}
-		}
-		state.bug << endl;
-	}
+	state.bug << "ZOC data turn " << state.turn << endl;
+	state.bug << *this;
 }
