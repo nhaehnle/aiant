@@ -1,4 +1,18 @@
 #!/usr/bin/env python
+#
+# Needs settings in file bots.json, which should look this this:
+# {
+#	"bots": [
+#		"python /home/prefect/gitdata/aichallenge/ants/dist/sample_bots/python/GreedyBot.py",
+#		"python /home/prefect/gitdata/aichallenge/ants/dist/sample_bots/python/HoldBot.py",
+#		"python /home/prefect/gitdata/aichallenge/ants/dist/sample_bots/python/HunterBot.py",
+#		"python /home/prefect/gitdata/aichallenge/ants/dist/sample_bots/python/LeftyBot.py",
+#		"/home/prefect/data/dev/aichallenge/v2/MyBot-v2",
+#		"/home/prefect/data/dev/aichallenge/v4/MyBot-v4"
+#	],
+#	"ants": "/home/prefect/gitdata/aichallenge/ants/"
+# }
+# "ants" is the path to the game distribution (contains the playgame.py file)
 
 import argparse
 import json
