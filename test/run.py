@@ -51,7 +51,10 @@ def main():
 		maprec = random.choice(maps)
 		print "Game {gameid}: {maprec[players]} player map {maprec[path]}".format(**locals())
 
-		mapbots = [random.choice(allbots) for i in range(maprec["players"])]
+		mapbots = []
+		while len(set(mapbots)) <= 1:
+			mapbots = [random.choice(allbots) for i in range(maprec["players"])]
+
 		for i in range(len(mapbots)):
 			print "  {i}: {bot}".format(i=i+1, bot=mapbots[i][1])
 
