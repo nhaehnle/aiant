@@ -44,7 +44,7 @@ ostream & operator<<(ostream & out, const Zoc & zoc)
 				int diff = zoc.m_enemy[cur] - zoc.m_me[cur];
 				if (diff > 3)
 					out << ' ';
-				else if (diff >= -3)
+				else if (diff > 0)
 					out << '.';
 				else
 					out << '+';
