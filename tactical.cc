@@ -1120,8 +1120,8 @@ int Tactical::evaluate_ant_positions(PlayerMove & mymove, bool myperspective)
 			continue;
 
 		Location global
-			((am.pos.row + d.offset.row) % state.rows,
-			 (am.pos.col + d.offset.col) % state.cols);
+			((am.pos.row + d.offset.row + state.rows) % state.rows,
+			 (am.pos.col + d.offset.col + state.cols) % state.cols);
 
 		if (!myperspective) {
 			value += (MaxZocValue - min(bot.m_zoc.m_me[global], uint(MaxZocValue))) * ZocFactor;
