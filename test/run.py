@@ -59,7 +59,7 @@ def main():
 			settings["ants"] + "playgame.py",
 			"--turns", "1000",
 			"--log_dir", "game_logs",
-			"--log_input", "--nolaunch", "--strict", "--serial",
+			"--log_input", "--nolaunch", "--serial",
 			"-g", str(gameid),
 			"--map", maprec["path"],
 		] + [bot[0] for bot in mapbots]
