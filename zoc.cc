@@ -38,16 +38,16 @@ ostream & operator<<(ostream & out, const Zoc & zoc)
 				out << (char)('a' + sq.ant);
 			else if (sq.isFood)
 				out << '*';
+			else if (zoc.m_enemy[cur] == 0)
+				out << '@';
 			else {
 				int diff = zoc.m_enemy[cur] - zoc.m_me[cur];
-				if (diff > 5)
+				if (diff > 3)
 					out << ' ';
-				else if (diff > 0)
+				else if (diff >= -3)
 					out << '.';
-				else if (diff > -2)
-					out << '+';
 				else
-					out << '@';
+					out << '+';
 			}
 		}
 		out << endl;
