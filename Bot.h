@@ -4,6 +4,7 @@
 #include "State.h"
 #include "map.h"
 
+struct HillDefense;
 struct Scout;
 struct Zoc;
 
@@ -54,6 +55,7 @@ struct Bot
 
 	Zoc & m_zoc;
 	Scout & m_scout;
+	HillDefense & m_hilldefense;
 	std::vector<Ant> m_ants;
 	std::vector<Food> m_foods;
 };

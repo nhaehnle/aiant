@@ -257,6 +257,7 @@ struct State
 	std::vector<double> scores;
 	bool gameover;
 	int64_t seed;
+	bool newwater; // have we seen new water this turn?
 
 	std::vector<std::vector<Square> > grid;
 	std::vector<Location> myAnts, enemyAnts, myHills, enemyHills, food;
@@ -278,6 +279,7 @@ struct State
 	uint manhattanDistance(const Location & loc1, const Location & loc2) const;
 	double distance(const Location &loc1, const Location &loc2) const;
 	Location getLocation(const Location &startLoc, int direction) const;
+	uint eucliddist2(const Location & loc1, const Location & loc2) const;
 
 	void updateVisionInformation();
 };

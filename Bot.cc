@@ -2,6 +2,7 @@
 
 #include "Bot.h"
 #include "astar.h"
+#include "hilldefense.h"
 #include "scout.h"
 #include "tactical.h"
 #include "zoc.h"
@@ -16,13 +17,15 @@ static const unsigned int TacticalFar = 5;
 //constructor
 Bot::Bot() :
 	m_zoc(*new Zoc(state)),
-	m_scout(*new Scout(*this))
+	m_scout(*new Scout(*this)),
+	m_hilldefense(*new HillDefense(*this))
 {
 
 }
 
 Bot::~Bot()
 {
+	delete &m_hilldefense;
 	delete &m_scout;
 	delete &m_zoc;
 }
@@ -37,6 +40,7 @@ void Bot::playGame()
 
 	m_zoc.init();
 	m_scout.init();
+	m_hilldefense.init();
 
 	//continues making moves while the game is not over
 	while(cin >> state)
@@ -224,6 +228,9 @@ void Bot::makeMoves()
 
 	//
 	assign_food();
+
+	//
+	m_hilldefense.run();
 
 	//
 	m_scout.run();
