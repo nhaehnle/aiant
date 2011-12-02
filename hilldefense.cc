@@ -104,7 +104,7 @@ void HillDefense::update_hill_distances(uint hillidx)
 
 			if (dist + 1 < hd->dist[n]) {
 				hd->dist[n] = dist + 1;
-				d.updatequeue.push_back(hd->pos);
+				d.updatequeue.push_back(n);
 			}
 		}
 	}
@@ -215,13 +215,19 @@ void HillDefense::run()
 
 			while (!hd->candidates.empty()) {
 				uint antidx = hd->candidates.back().antidx;
+				uint dist = hd->candidates.back().dist;
+
+//				state.bug << "  hill at " << hd->pos << " candidate ant " << antidx
+//					<< " at " << bot.m_ants[antidx].where << " dist " << dist << endl;
+
 				if (claimed[antidx]) {
+//					state.bug << "    already claimed" << endl;
 					hd->candidates.pop_back();
 					continue;
 				}
 
-				uint dist = hd->candidates.back().dist;
 				if (dist < bestdistance) {
+//					state.bug << "   best so far" << endl;
 					bestdistance = dist;
 					bestantidx = antidx;
 					besthillidx = hillidx;
