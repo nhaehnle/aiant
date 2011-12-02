@@ -4,22 +4,10 @@
 #include "State.h"
 #include "map.h"
 
+struct FoodSeeker;
 struct HillDefense;
 struct Scout;
 struct Zoc;
-
-struct Food {
-	Location where;
-	bool claimed;
-
-	Food() : claimed(false) {}
-};
-
-struct PointOfInterest {
-	Location where;
-	uint distance; ///< Manhattan distance
-	int direction;
-};
 
 struct Ant {
 	Location where;
@@ -47,17 +35,15 @@ struct Bot
 	void endTurn();     //indicates to the engine that it has made its moves
 
 	uint myantidx_at(const Location & pos);
-	uint foodidx_at(const Location & pos);
 
-	void assign_food();
 	bool try_rotate_move(uint antidx, const Map<bool> & claims);
 	void make_moves();
 
 	Zoc & m_zoc;
+	FoodSeeker & m_foodseeker;
 	Scout & m_scout;
 	HillDefense & m_hilldefense;
 	std::vector<Ant> m_ants;
-	std::vector<Food> m_foods;
 };
 
 #endif //BOT_H_

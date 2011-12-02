@@ -2,6 +2,7 @@
 
 #include "Bot.h"
 #include "astar.h"
+#include "foodseeker.h"
 #include "hilldefense.h"
 #include "scout.h"
 #include "tactical.h"
@@ -17,6 +18,7 @@ static const unsigned int TacticalFar = 5;
 //constructor
 Bot::Bot() :
 	m_zoc(*new Zoc(state)),
+	m_foodseeker(*new FoodSeeker(*this)),
 	m_scout(*new Scout(*this)),
 	m_hilldefense(*new HillDefense(*this))
 {
@@ -27,6 +29,7 @@ Bot::~Bot()
 {
 	delete &m_hilldefense;
 	delete &m_scout;
+	delete &m_foodseeker;
 	delete &m_zoc;
 }
 
@@ -39,6 +42,7 @@ void Bot::playGame()
 	endTurn();
 
 	m_zoc.init();
+	m_foodseeker.init();
 	m_scout.init();
 	m_hilldefense.init();
 
@@ -61,66 +65,6 @@ uint Bot::myantidx_at(const Location & pos)
 	}
 
 	abort();
-}
-
-uint Bot::foodidx_at(const Location & pos)
-{
-	state.bug << "foodidx " << pos << endl;
-
-	assert(state.grid[pos.row][pos.col].isFood);
-
-	for (uint idx = 0; idx < m_foods.size(); ++idx) {
-		if (m_foods[idx].where == pos)
-			return idx;
-	}
-
-	state.bug << "nope " << pos << endl;
-
-	abort();
-}
-
-
-void Bot::assign_food()
-{
-	AStar<LocationEvalZero, StepEvalDefault> astar(state, LocationEvalZero(), StepEvalDefault(state));
-	uint unassigned = min(m_foods.size(), m_ants.size());
-
-	while (unassigned > 0) {
-		state.bug << unassigned << " unassigned" << endl;
-		for (uint foodidx = 0; foodidx < m_foods.size(); ++foodidx) {
-			if (!m_foods[foodidx].claimed) {
-				astar.push(m_foods[foodidx].where);
-			}
-		}
-
-		Location where;
-		int32_t cost;
-		while (astar.step(where, cost)) {
-			if (cost > 3 * state.viewradius)
-				return;
-
-			if (state.grid[where.row][where.col].ant != 0)
-				continue;
-
-			uint antidx = myantidx_at(where);
-			Ant & ant = m_ants[antidx];
-
-			if (ant.direction >= 0)
-				continue;
-
-			Location foodwhere = astar.getsource(where);
-			ant.direction = reversedir(astar.getlaststep(where));
-
-			state.bug << "ant " << antidx << " at " << where
-				<< " assigned to food at " << foodwhere << " (" << CDIRECTIONS[ant.direction] << "), distance " << cost << endl;
-
-			m_foods[foodidx_at(foodwhere)].claimed = true;
-			unassigned--;
-			break;
-		}
-
-		astar.clear();
-	}
 }
 
 bool Bot::try_rotate_move(uint antidx, const Map<bool> & claims)
@@ -155,8 +99,8 @@ void Bot::make_moves()
 {
 	Map<bool> claimed(state.rows, state.cols);
 
-	for (uint foodidx = 0; foodidx < m_foods.size(); ++foodidx)
-		claimed[m_foods[foodidx].where] = true;
+	for (uint foodidx = 0; foodidx < state.food.size(); ++foodidx)
+		claimed[state.food[foodidx]] = true;
 
 	for (uint antidx = 0; antidx < m_ants.size(); ++antidx) {
 		Ant & ant = m_ants[antidx];
@@ -218,16 +162,7 @@ void Bot::makeMoves()
 	}
 
 	//
-	m_foods.clear();
-	m_foods.reserve(state.food.size());
-	for (uint foodidx = 0; foodidx < state.food.size(); ++foodidx) {
-		m_foods.push_back(Food());
-		Food & food = m_foods.back();
-		food.where = state.food[foodidx];
-	}
-
-	//
-	assign_food();
+	m_foodseeker.run();
 
 	//
 	m_hilldefense.run();
