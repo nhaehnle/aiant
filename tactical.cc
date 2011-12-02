@@ -10,6 +10,7 @@
 
 #include "Bot.h"
 #include "State.h"
+#include "zoc.h"
 
 using namespace std;
 

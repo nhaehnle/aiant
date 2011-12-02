@@ -41,4 +41,5 @@ private:
 	std::vector<Type> m_data;
 };
 
+
 #endif // MAP_H

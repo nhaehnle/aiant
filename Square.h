@@ -11,11 +11,13 @@ struct Square
 	bool isVisible, isWater, isHill, isFood;
 	int ant, hillPlayer;
 	std::vector<int> deadAnts;
+	int lastseen;
 
 	Square()
 	{
 		isVisible = isWater = isHill = isFood = 0;
 		ant = hillPlayer = -1;
+		lastseen = 0;
 	}
 
 	//resets the information for the square except water information

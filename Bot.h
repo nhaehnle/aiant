@@ -3,7 +3,9 @@
 
 #include "State.h"
 #include "map.h"
-#include "zoc.h"
+
+struct Scout;
+struct Zoc;
 
 struct Food {
 	Location where;
@@ -40,6 +42,7 @@ struct Bot
 	State state;
 
 	Bot();
+	~Bot();
 
 	void playGame();    //plays a single game of Ants
 
@@ -53,7 +56,8 @@ struct Bot
 	bool try_rotate_move(uint antidx, const Map<bool> & claims);
 	void make_moves();
 
-	Zoc m_zoc;
+	Zoc & m_zoc;
+	Scout & m_scout;
 	std::vector<Ant> m_ants;
 	std::vector<Food> m_foods;
 };

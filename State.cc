@@ -87,37 +87,39 @@ Location State::getLocation(const Location &loc, int direction) const
 */
 void State::updateVisionInformation()
 {
-    std::queue<Location> locQueue;
-    Location sLoc, cLoc, nLoc;
+	std::queue<Location> locQueue;
+	Location sLoc, cLoc, nLoc;
 
-    for(int a=0; a<(int) myAnts.size(); a++)
-    {
-        sLoc = myAnts[a];
-        locQueue.push(sLoc);
+	for(int a=0; a<(int) myAnts.size(); a++)
+	{
+		sLoc = myAnts[a];
+		locQueue.push(sLoc);
 
-        std::vector<std::vector<bool> > visited(rows, std::vector<bool>(cols, 0));
-        grid[sLoc.row][sLoc.col].isVisible = 1;
-        visited[sLoc.row][sLoc.col] = 1;
+		std::vector<std::vector<bool> > visited(rows, std::vector<bool>(cols, 0));
+		grid[sLoc.row][sLoc.col].isVisible = 1;
+		grid[sLoc.row][sLoc.col].lastseen = turn;
+		visited[sLoc.row][sLoc.col] = 1;
 
-        while(!locQueue.empty())
-        {
-            cLoc = locQueue.front();
-            locQueue.pop();
+		while(!locQueue.empty())
+		{
+			cLoc = locQueue.front();
+			locQueue.pop();
 
-            for(int d=0; d<TDIRECTIONS; d++)
-            {
-                nLoc = getLocation(cLoc, d);
+			for(int d=0; d<TDIRECTIONS; d++)
+			{
+				nLoc = getLocation(cLoc, d);
 
-                if(!visited[nLoc.row][nLoc.col] && distance(sLoc, nLoc) <= viewradius)
-                {
-                    grid[nLoc.row][nLoc.col].isVisible = 1;
-                    locQueue.push(nLoc);
-                }
-                visited[nLoc.row][nLoc.col] = 1;
-            }
-        }
-    }
-};
+				if(!visited[nLoc.row][nLoc.col] && distance(sLoc, nLoc) <= viewradius)
+				{
+					grid[nLoc.row][nLoc.col].isVisible = 1;
+					grid[nLoc.row][nLoc.col].lastseen = turn;
+					locQueue.push(nLoc);
+				}
+				visited[nLoc.row][nLoc.col] = 1;
+			}
+		}
+	}
+}
 
 /*
     This is the output function for a state. It will add a char map
