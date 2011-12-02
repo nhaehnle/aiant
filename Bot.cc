@@ -101,18 +101,16 @@ void Bot::assign_food()
 			uint antidx = myantidx_at(where);
 			Ant & ant = m_ants[antidx];
 
-			if (ant.hasfood)
+			if (ant.direction >= 0)
 				continue;
 
-			ant.hasfood = true;
-			ant.food.where = astar.getsource(where);
-			ant.food.direction = reversedir(astar.getlaststep(where));
-			ant.food.distance = cost;
+			Location foodwhere = astar.getsource(where);
+			ant.direction = reversedir(astar.getlaststep(where));
 
 			state.bug << "ant " << antidx << " at " << where
-				<< " assigned to food at " << ant.food.where << " (" << CDIRECTIONS[ant.food.direction] << "), distance " << cost << endl;
+				<< " assigned to food at " << foodwhere << " (" << CDIRECTIONS[ant.direction] << "), distance " << cost << endl;
 
-			m_foods[foodidx_at(ant.food.where)].claimed = true;
+			m_foods[foodidx_at(foodwhere)].claimed = true;
 			unassigned--;
 			break;
 		}
@@ -205,7 +203,6 @@ void Bot::makeMoves()
 	state.bug << state << endl;
 
 	m_zoc.update();
-	m_scout.run();
 
 	//
 	m_ants.clear();
@@ -229,41 +226,34 @@ void Bot::makeMoves()
 	assign_food();
 
 	//
+	m_scout.run();
+
+	//
 	for (uint antidx = 0; antidx < state.myAnts.size(); ++antidx) {
 		Ant & ant = m_ants[antidx];
-		ant.goal = ant.where;
-		ant.direction = -1;
 
-		state.bug << "ant " << antidx << " at " << ant.where << endl;
+		state.bug << "ant " << antidx << " at " << ant.where << " dir " << cdir(ant.direction) << endl;
 
-		if (ant.hasfood) {
-			// assigned to a food source, go there
-			if (ant.food.distance > 1) {
-				ant.goal = ant.food.where;
-				ant.direction = ant.food.direction;
-			}
-		} else {
+		if (ant.direction < 0) {
 			static int rotate = 0;
 			rotate = (rotate + 1) % TDIRECTIONS;
 
 			// not looking for food, go towards enemy territory
 			uint my = m_zoc.m_enemy[ant.where];
+			const int * dirperm = getdirperm();
 			for (int predir = 0; predir < TDIRECTIONS; predir++) {
-				int dir = (predir + rotate) % TDIRECTIONS;
+				int dir = dirperm[predir];
 				Location loc = state.getLocation(ant.where, dir);
 
 				if (!state.grid[loc.row][loc.col].isWater) {
 					if (m_zoc.m_enemy[loc] < my) {
 						state.bug << "  zoc move " << cdir(dir) << endl;
-						ant.goal = loc;
 						ant.direction = dir;
 						break;
 					}
 				}
 			}
 		}
-
-		state.bug << "  goal " << ant.goal << " dir " << cdir(ant.direction) << endl;
 	}
 
 	//

@@ -23,15 +23,11 @@ struct PointOfInterest {
 struct Ant {
 	Location where;
 
-	bool hasfood;
-	PointOfInterest food;
-
 	bool hastactical;
 
-	Location goal;
 	int direction;
 
-	Ant() : hasfood(false), hastactical(false), direction(-1) {}
+	Ant() : hastactical(false), direction(-1) {}
 };
 
 /*

@@ -1318,12 +1318,11 @@ void Tactical::make_moves(const Location & center)
 		assert(move.antmoves[idx].override || ant.direction == dir);
 
 		ant.direction = dir;
-		ant.goal = state.getLocation(ant.where, dir);
 
 		if (move.antmoves[idx].override) {
 			ant.hastactical = true;
 			state.bug << "  Ant at " << ant.where
-				<< " tactical move to " << ant.goal << " (" << cdir(ant.direction) << ")" << endl;
+				<< " tactical move to " << state.getLocation(ant.where, dir) << " (" << cdir(ant.direction) << ")" << endl;
 		}
 	}
 }

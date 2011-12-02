@@ -148,5 +148,5 @@ void Zoc::update()
 	}
 
 	state.bug << "ZOC data turn " << state.turn << endl;
-	state.bug << *this;
+	//state.bug << *this;
 }
