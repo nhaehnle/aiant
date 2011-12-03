@@ -176,6 +176,12 @@ void Bot::makeMoves()
 
 		state.bug << "ant " << antidx << " at " << ant.where << " dir " << cdir(ant.direction) << endl;
 
+		Location n = state.getLocation(ant.where, ant.direction);
+		if (state.grid[n.row][n.col].isWater) {
+			state.bug << "  attempt to walk into water" << endl;
+			ant.direction = -1;
+		}
+
 		if (ant.direction < 0) {
 			static int rotate = 0;
 			rotate = (rotate + 1) % TDIRECTIONS;
