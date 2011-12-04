@@ -118,15 +118,18 @@ def main():
 					print ', '.join(["{0}:{1}".format(gameidx,botid) for gameidx,botid in details[status]])
 				print
 
-	print "Bots", ' ' * maxnamelen, ' '.join(status)
+	statusfields = [(s, max(10, len(s))) for s in status]
+	print "Bots", ' ' * maxnamelen, ' '.join(["{0:>{1}}".format(s, l) for s, l in statusfields])
 	for idx in range(len(Bots)):
 		bot = Bots[idx]
 		print "{0:>3}: {bot.name:<{maxnamelen}}".format(idx+1, **locals()),
-		for s in status:
+		for s, l in statusfields:
 			count = 0
 			if s in bot.status:
 				count = bot.status[s]
-			print "{0:>{1}}".format(count, len(s)),
+			print "{0:>{1}}".format(
+				"{0} ({1}%)".format(count, int(100 * count / len(bot.games))),
+				l),
 		print
 	print
 
