@@ -74,6 +74,17 @@ struct LocationEvalZero {
 	int32_t operator()(const Location & pos) const {return 0;}
 };
 
+struct LocationEvalSeek {
+	LocationEvalSeek(State & s,const Location & t) : state(s), target(t) {}
+
+	int32_t operator()(const Location & pos) const {
+		return state.manhattanDistance(pos, target);
+	}
+
+	State & state;
+	Location target;
+};
+
 struct StepEvalDefault {
 	StepEvalDefault(const State & state) : m_state(state) {}
 
@@ -126,11 +137,9 @@ struct AStar : BaseAStar {
 		cost = f.cost;
 		f.state = Field::WHITE;
 
-		static int dirshift = 0;
-		dirshift = (dirshift + 1) % TDIRECTIONS;
-
+		const int * dirperm = getdirperm();
 		for (int predir = 0; predir < TDIRECTIONS; ++predir) {
-			int dir = (predir + dirshift) % TDIRECTIONS;
+			int dir = dirperm[predir];
 			Location neighbour = m_state.getLocation(pos, dir);
 			int32_t stepcost;
 

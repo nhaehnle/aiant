@@ -4,6 +4,7 @@
 #include "astar.h"
 #include "foodseeker.h"
 #include "hilldefense.h"
+#include "opportunisticattack.h"
 #include "scout.h"
 #include "tactical.h"
 #include "zoc.h"
@@ -20,13 +21,15 @@ Bot::Bot() :
 	m_zoc(*new Zoc(state)),
 	m_foodseeker(*new FoodSeeker(*this)),
 	m_scout(*new Scout(*this)),
-	m_hilldefense(*new HillDefense(*this))
+	m_hilldefense(*new HillDefense(*this)),
+	m_opportunisticattack(*new OpportunisticAttack(*this))
 {
 
 }
 
 Bot::~Bot()
 {
+	delete &m_opportunisticattack;
 	delete &m_hilldefense;
 	delete &m_scout;
 	delete &m_foodseeker;
@@ -45,6 +48,7 @@ void Bot::playGame()
 	m_foodseeker.init();
 	m_scout.init();
 	m_hilldefense.init();
+	m_opportunisticattack.init();
 
 	//continues making moves while the game is not over
 	while(cin >> state)
@@ -166,6 +170,9 @@ void Bot::makeMoves()
 
 	//
 	m_hilldefense.run();
+
+	//
+	m_opportunisticattack.run();
 
 	//
 	m_scout.run();
