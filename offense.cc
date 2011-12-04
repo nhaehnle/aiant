@@ -156,7 +156,9 @@ void Offense::update_hills()
 		return;
 
 	//
-	uint hillidx = min(d.lastupdated, uint(d.hills.size() - 1));
+	if (d.lastupdated >= d.hills.size())
+		d.lastupdated = 0;
+	uint hillidx = d.lastupdated;
 	do {
 		hillidx++;
 		if (hillidx >= d.hills.size())
