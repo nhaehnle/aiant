@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+import argparse
 import json
 import os
 
@@ -7,12 +8,12 @@ class Bot:
 	def __init__(self, idx, name):
 		self.idx = idx
 		self.name = name
-		self.games = 0
+		self.games = []
 		self.status = {}
 		self.results = []
 
-	def addgame(self, status):
-		self.games += 1
+	def addgame(self, gameidx, botid, status):
+		self.games.append((gameidx, botid, status))
 		if status in self.status:
 			self.status[status] += 1
 		else:
@@ -41,7 +42,7 @@ def getbotidx(name):
 	Bots.append(Bot(len(Bots), name))
 	return len(Bots)-1
 
-def process_replay(replay):
+def process_replay(replayidx, replay):
 	global NrGames
 
 	if "error" in replay:
@@ -52,7 +53,7 @@ def process_replay(replay):
 
 	for gameidx in range(len(botidx)):
 		bot = Bots[botidx[gameidx]]
-		bot.addgame(replay["status"][gameidx])
+		bot.addgame(replayidx, gameidx, replay["status"][gameidx])
 		myscore = replay["score"][gameidx]
 		myrank = replay["rank"][gameidx]
 		for othergameidx in range(len(botidx)):
@@ -89,7 +90,7 @@ def loadreplays():
 				print "Error parsing replay", replayidx
 				continue
 
-			if not process_replay(replay):
+			if not process_replay(replayidx, replay):
 				print "Error in replay", replayidx
 
 def main():
@@ -102,6 +103,20 @@ def main():
 
 	print "{0} games played".format(NrGames)
 	print
+
+	if args.bot:
+		for bot in Bots:
+			if bot.name == args.bot:
+				print "Details for {0}".format(bot.name)
+				details = {}
+				for gameidx,botid,status in bot.games:
+					if not status in details:
+						details[status] = []
+					details[status].append((gameidx, botid))
+				for status in details.iterkeys():
+					print "  {0}:".format(status),
+					print ', '.join(["{0}:{1}".format(gameidx,botid) for gameidx,botid in details[status]])
+				print
 
 	print "Bots", ' ' * maxnamelen, ' '.join(status)
 	for idx in range(len(Bots)):
@@ -131,4 +146,9 @@ def main():
 		print
 
 if __name__ == "__main__":
+	parser = argparse.ArgumentParser(description='Collect statistics form replays.')
+	parser.add_argument('--bot', metavar='BOT', type=str, help='Show details for the given bot')
+
+	args = parser.parse_args()
+
 	main()
