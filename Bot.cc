@@ -4,6 +4,7 @@
 #include "astar.h"
 #include "foodseeker.h"
 #include "hilldefense.h"
+#include "offense.h"
 #include "opportunisticattack.h"
 #include "scout.h"
 #include "tactical.h"
@@ -22,13 +23,15 @@ Bot::Bot() :
 	m_foodseeker(*new FoodSeeker(*this)),
 	m_scout(*new Scout(*this)),
 	m_hilldefense(*new HillDefense(*this)),
-	m_opportunisticattack(*new OpportunisticAttack(*this))
+	m_opportunisticattack(*new OpportunisticAttack(*this)),
+	m_offense(*new Offense(*this))
 {
 
 }
 
 Bot::~Bot()
 {
+	delete &m_offense;
 	delete &m_opportunisticattack;
 	delete &m_hilldefense;
 	delete &m_scout;
@@ -49,6 +52,7 @@ void Bot::playGame()
 	m_scout.init();
 	m_hilldefense.init();
 	m_opportunisticattack.init();
+	m_offense.init();
 
 	//continues making moves while the game is not over
 	while(cin >> state)
@@ -176,6 +180,9 @@ void Bot::makeMoves()
 
 	//
 	m_scout.run();
+
+	//
+	m_offense.run();
 
 	//
 	for (uint antidx = 0; antidx < state.myAnts.size(); ++antidx) {

@@ -12,4 +12,5 @@ add_executable(MyBot
 	hilldefense.cc
 	foodseeker.cc
 	opportunisticattack.cc
+	offense.cc
 )

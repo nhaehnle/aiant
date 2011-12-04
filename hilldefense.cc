@@ -43,11 +43,13 @@ struct HillData {
 struct HillDefense::Data {
 	vector<HillData *> hills;
 	uint lastupdated;
+	bool hilldestroyed;
 
 	vector<Location> updatequeue;
 
 	Data() :
-		lastupdated(0)
+		lastupdated(0),
+		hilldestroyed(false)
 	{
 	}
 
@@ -112,6 +114,8 @@ void HillDefense::update_hill_distances(uint hillidx)
 
 void HillDefense::update_hills()
 {
+	d.hilldestroyed = false;
+
 	if (state.newwater) {
 		for (uint hillidx = 0; hillidx < d.hills.size(); ++hillidx)
 			d.hills[hillidx]->needupdate = true;
@@ -129,6 +133,7 @@ void HillDefense::update_hills()
 			d.hills[hillidx] = d.hills.back();
 			d.hills.pop_back();
 			hillidx--;
+			d.hilldestroyed = true;
 		}
 	}
 
@@ -151,7 +156,7 @@ void HillDefense::update_hills()
 		return;
 
 	// update the distance map of one hill
-	uint hillidx = d.lastupdated;
+	uint hillidx = min(d.lastupdated, uint(d.hills.size() - 1));
 	do {
 		hillidx++;
 		if (hillidx >= d.hills.size())
@@ -295,4 +300,20 @@ void HillDefense::run()
 
 		ant.direction = bestdirection;
 	}
+}
+
+uint HillDefense::getnrhills()
+{
+	return d.hills.size();
+}
+
+const Location & HillDefense::gethill(uint idx)
+{
+	assert(idx < d.hills.size());
+	return d.hills[idx]->pos;
+}
+
+bool HillDefense::hilldestroyed()
+{
+	return d.hilldestroyed;
 }

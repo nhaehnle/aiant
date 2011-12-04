@@ -4,6 +4,7 @@
 #include <cstdlib>
 
 struct Bot;
+struct Location;
 struct State;
 
 struct HillDefense {
@@ -12,6 +13,10 @@ struct HillDefense {
 
 	void init();
 	void run();
+
+	bool hilldestroyed();
+	uint getnrhills();
+	const Location & gethill(uint idx);
 
 	void update_hills();
 	void update_hill_distances(uint hillidx);
