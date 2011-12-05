@@ -281,7 +281,9 @@ struct State
 	double distance(const Location &loc1, const Location &loc2) const;
 	Location getLocation(const Location &startLoc, int direction) const;
 	uint eucliddist2(const Location & loc1, const Location & loc2) const;
-	Location addLocations(const Location & a, const Location & b) const;
+	Location addLocations(const Location & a, const Location & b) const {
+		return Location((a.row + b.row + rows) % rows, (a.col + b.col + cols) % cols);
+	}
 
 	void updateVisionInformation();
 };

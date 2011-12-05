@@ -7,6 +7,7 @@
 #include "offense.h"
 #include "opportunisticattack.h"
 #include "scout.h"
+#include "symmetry.h"
 #include "tactical.h"
 #include "zoc.h"
 
@@ -20,6 +21,7 @@ static const unsigned int TacticalFar = 5;
 //constructor
 Bot::Bot() :
 	m_zoc(*new Zoc(state)),
+	m_symmetry(*new SymmetryFinder(*this)),
 	m_foodseeker(*new FoodSeeker(*this)),
 	m_scout(*new Scout(*this)),
 	m_hilldefense(*new HillDefense(*this)),
@@ -36,6 +38,7 @@ Bot::~Bot()
 	delete &m_hilldefense;
 	delete &m_scout;
 	delete &m_foodseeker;
+	delete &m_symmetry;
 	delete &m_zoc;
 }
 
@@ -48,6 +51,7 @@ void Bot::playGame()
 	endTurn();
 
 	m_zoc.init();
+	m_symmetry.init();
 	m_foodseeker.init();
 	m_scout.init();
 	m_hilldefense.init();
@@ -159,6 +163,7 @@ void Bot::makeMoves()
 	state.bug << state << endl;
 
 	m_zoc.update();
+	m_symmetry.run();
 
 	//
 	m_ants.clear();

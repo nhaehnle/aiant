@@ -9,6 +9,7 @@ struct HillDefense;
 struct Offense;
 struct OpportunisticAttack;
 struct Scout;
+struct SymmetryFinder;
 struct Zoc;
 
 struct Ant {
@@ -42,6 +43,7 @@ struct Bot
 	void make_moves();
 
 	Zoc & m_zoc;
+	SymmetryFinder & m_symmetry;
 	FoodSeeker & m_foodseeker;
 	Scout & m_scout;
 	HillDefense & m_hilldefense;
