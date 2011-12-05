@@ -93,7 +93,7 @@ struct Symmetry {
 
 ostream & operator<<(ostream & out, const Symmetry & s)
 {
-	return out << "[" << s.origin << ", " << s.orientation << "]" << endl;
+	return out << "[" << s.origin << ", " << s.orientation << "]";
 }
 
 /**
@@ -248,7 +248,7 @@ void SymmetryFinder::update_map()
 	for (cur.row = 0; cur.row < state.rows; ++cur.row) {
 		for (cur.col = 0; cur.col < state.cols; ++cur.col) {
 			Square & sq = state.grid[cur.row][cur.col];
-			if (sq.lastseen > 0)
+			if (sq.lastseen == 0)
 				continue;
 
 			if (map[cur] & MapKnown) {
