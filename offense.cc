@@ -5,13 +5,14 @@
 
 #include "Bot.h"
 #include "hilldefense.h"
+#include "symmetry.h"
 
 using namespace std;
 
-static const uint MinUnassignedAnts = 50;
+static const uint MinUnassignedAnts = 60;
 static const uint AttackAntsMargin = 10;
-static const uint AttackAntNom = 3;
-static const uint AttackAntDenom = 5;
+static const uint AttackAntNom = 1;
+static const uint AttackAntDenom = 2;
 
 static const uint AttackReconsiderDist = 12;
 
@@ -90,7 +91,7 @@ void Offense::update_hill_distance(uint hillidx)
 
 		for (int dir = 0; dir < TDIRECTIONS; ++dir) {
 			Location n = state.getLocation(cur, dir);
-			if (state.grid[n.row][n.col].isWater)
+			if (bot.m_symmetry.map[n] & SymmetryFinder::MapWater)
 				continue;
 			if (dist >= ehd->dist[n])
 				continue;
@@ -112,7 +113,7 @@ void Offense::update_hill_distance(uint hillidx)
 
 void Offense::update_hills()
 {
-	if (state.newwater || bot.m_hilldefense.hilldestroyed()) {
+	if (bot.m_symmetry.newwater || bot.m_hilldefense.hilldestroyed()) {
 		for (uint hillidx = 0; hillidx < d.hills.size(); ++hillidx)
 			d.hills[hillidx]->needupdate = true;
 	}
@@ -138,8 +139,8 @@ void Offense::update_hills()
 		}
 	}
 
-	for (uint stidx = 0; stidx < state.enemyHills.size(); ++stidx) {
-		const Location & pos = state.enemyHills[stidx];
+	for (uint stidx = 0; stidx < bot.m_symmetry.enemy_hills.size(); ++stidx) {
+		const Location & pos = bot.m_symmetry.enemy_hills[stidx];
 
 		for (uint hillidx = 0; hillidx < d.hills.size(); ++hillidx) {
 			if (d.hills[hillidx]->pos == pos)
