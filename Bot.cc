@@ -81,14 +81,8 @@ uint Bot::myantidx_at(const Location & pos)
 
 bool Bot::try_rotate_move(uint antidx, const Map<bool> & claims)
 {
-	static int rotate = 1;
-	if (rotate == 1)
-		rotate = TDIRECTIONS - 1;
-	else
-		rotate = 1;
-
 	Ant & ant = m_ants[antidx];
-	int altdir = (ant.direction + rotate) % TDIRECTIONS;
+	int altdir = (ant.direction + 1 + (fastrng() & 2)) % TDIRECTIONS;
 	Location moveto = state.getLocation(ant.where, altdir);
 
 	state.bug << "  try altdir " << cdir(altdir) << " to " << moveto << endl;
@@ -130,10 +124,9 @@ void Bot::make_moves()
 				ant.direction = -1;
 			} else {
 				state.bug << "  rotate" << endl;
-				static int rotate = 0;
-				rotate = (rotate + 1) % TDIRECTIONS;
+				const int * dirperm = getdirperm();
 				for (int predir = 0; predir < TDIRECTIONS; ++predir) {
-					int dir = (predir + rotate) % TDIRECTIONS;
+					int dir = dirperm[predir];
 					moveto = state.getLocation(ant.where, dir);
 					if (!claimed[moveto]) {
 						ant.direction = dir;
@@ -202,9 +195,6 @@ void Bot::makeMoves()
 		}
 
 		if (ant.direction < 0) {
-			static int rotate = 0;
-			rotate = (rotate + 1) % TDIRECTIONS;
-
 			// not looking for food, go towards enemy territory
 			uint my = m_zoc.m_enemy[ant.where];
 			const int * dirperm = getdirperm();
