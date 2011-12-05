@@ -30,6 +30,7 @@ void State::setup()
 void State::reset()
 {
 	newwater = false;
+	newsquare = false;
 	myAnts.clear();
 	enemyAnts.clear();
 	myHills.clear();
@@ -107,6 +108,8 @@ void State::updateVisionInformation()
 
 		std::vector<std::vector<bool> > visited(rows, std::vector<bool>(cols, 0));
 		grid[sLoc.row][sLoc.col].isVisible = 1;
+		if (grid[sLoc.row][sLoc.col].lastseen == 0)
+			newsquare = true;
 		grid[sLoc.row][sLoc.col].lastseen = turn;
 		visited[sLoc.row][sLoc.col] = 1;
 
@@ -122,6 +125,8 @@ void State::updateVisionInformation()
 				if(!visited[nLoc.row][nLoc.col] && distance(sLoc, nLoc) <= viewradius)
 				{
 					grid[nLoc.row][nLoc.col].isVisible = 1;
+					if (grid[nLoc.row][nLoc.col].lastseen == 0)
+						newsquare = true;
 					grid[nLoc.row][nLoc.col].lastseen = turn;
 					locQueue.push(nLoc);
 				}
