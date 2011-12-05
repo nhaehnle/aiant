@@ -373,8 +373,6 @@ void SymmetryFinder::compute_fingerprints()
 				}
 			}
 
-			state.bug << "  fingerprint: " << center << " : " << fingerprint << endl;
-
 			map[center] |= MapFingerprinted;
 			d.fingerprints[center] = fingerprint;
 			if (fingerprint)
@@ -597,5 +595,5 @@ void SymmetryFinder::run()
 		}
 	}
 
-	state.bug << *this;
+	//state.bug << *this;
 }
