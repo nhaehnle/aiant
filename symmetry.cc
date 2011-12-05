@@ -389,7 +389,7 @@ void SymmetryFinder::add_symmetry(const Symmetry & s)
 	if (d.symmetries.count(s))
 		return;
 
-	state.bug << "Adding symmetry" << s << endl;
+	state.bug << "Adding symmetry " << s << endl;
 	d.symmetries.insert(s);
 
 	Location cur;
