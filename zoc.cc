@@ -74,7 +74,10 @@ void Zoc::update()
 	std::queue<Location> open;
 	for (uint idx = 0; idx < oldenemies.size(); ++idx) {
 		cur = oldenemies[idx];
-		m_enemy[cur] = 0;
+		if (m_enemy[cur] > 0) {
+			m_enemy[cur] = 0;
+			open.push(cur);
+		}
 		for (int dir = 0; dir < TDIRECTIONS; ++dir) {
 			Location n = state.getLocation(cur, dir);
 			Square & sq = state.grid[n.row][n.col];
@@ -148,5 +151,5 @@ void Zoc::update()
 	}
 
 	state.bug << "ZOC data turn " << state.turn << endl;
-	//state.bug << *this;
+	state.bug << *this;
 }
