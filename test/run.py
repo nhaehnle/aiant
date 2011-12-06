@@ -75,6 +75,7 @@ def main():
 		args = [
 			settings["ants"] + "playgame.py",
 			"--turns", "1000",
+			"--turntime", "500",
 			"--log_dir", "game_logs",
 			"--log_input", "--nolaunch", "--serial",
 			"-g", str(gameid),
