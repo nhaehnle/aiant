@@ -25,7 +25,7 @@ static const int HillValue = 300;
 static const int ValueKill = 5000;
 static const int ValueLoss = -6000;
 static const int ValueEat = 1000;
-static const int ValueUselessDeath = -1500;
+//static const int ValueUselessDeath = -1500;
 
 static const uint MaxEval = 50; ///< max number of moves to evaluate
 static const uint MaxIdleDist2 = 10;
@@ -187,7 +187,7 @@ struct PlayerMove {
 	uint hash;
 	uint nrcollided;
 
-	static const uint8_t AntsMask = 0xc0;
+	static const uint8_t AntsMask = 0xe0;
 	static const uint8_t AntsShift = 5;
 	static const uint8_t AttackMask = 0x1f;
 	Submap map;
@@ -1273,12 +1273,12 @@ bool Tactical::evaluate_new_moves()
 			compute_deaths(mymove, enemymove, mydeaths, enemydeaths);
 
 			myvalue += mydeaths * ValueLoss + enemydeaths * ValueKill;
-			if ((mydeaths || mymove.nrcollided) && !enemydeaths)
-				myvalue += ValueUselessDeath;
+// 			if ((mydeaths || mymove.nrcollided) && !enemydeaths)
+// 				myvalue += ValueUselessDeath;
 
 			enemyvalue += mydeaths * ValueKill + enemydeaths * ValueLoss;
-			if ((enemydeaths || enemymove.nrcollided) && !mydeaths)
-				enemyvalue += ValueUselessDeath;
+// 			if ((enemydeaths || enemymove.nrcollided) && !mydeaths)
+// 				enemyvalue += ValueUselessDeath;
 
 			int myposvalue = evaluate_ant_positions(mymove, true);
 			int enemyposvalue = evaluate_ant_positions(enemymove, false);
