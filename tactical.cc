@@ -610,6 +610,8 @@ struct NewMove {
 		am.override = 1;
 
 		pm.ant_mark(myantidx);
+
+		state.bug << "antmove " << myantidx << " to " << cdir(direction) << " aka " << am.pos << endl;
 	}
 
 	void commit()
@@ -818,6 +820,8 @@ struct Improve {
 
 	bool pushmove(NewMove & nm, uint myantidx, int direction)
 	{
+		state.bug << "pushmove " << myantidx << " at " << nm.move().antmoves[myantidx].pos << " to " << cdir(direction) << endl;
+
 		// This has a bias towards retreating away from the enemy
 		for (int iters = 0; iters < 5; ++iters) {
 			PlayerMove::AntMove & am = nm.move().antmoves[myantidx];
@@ -834,7 +838,7 @@ struct Improve {
 				uint otheridx = (p * preidx + ofs) % d.myants.size();
 				PlayerMove::AntMove & otherm = nm.move().antmoves[otheridx];
 
-				if (otheridx == myantidx && otherm.pos != am.pos)
+				if (otheridx == myantidx || otherm.pos != am.pos)
 					continue;
 
 				int allfreedirection = -2;
