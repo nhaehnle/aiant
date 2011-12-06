@@ -109,13 +109,13 @@ def main():
 			if bot.name == args.bot:
 				print "Details for {0}".format(bot.name)
 				details = {}
-				for gameidx,botid,status in bot.games:
-					if not status in details:
-						details[status] = []
-					details[status].append((gameidx, botid))
-				for status in details.iterkeys():
-					print "  {0}:".format(status),
-					print ', '.join(["{0}:{1}".format(gameidx,botid) for gameidx,botid in details[status]])
+				for gameidx,botid,s in bot.games:
+					if not s in details:
+						details[s] = []
+					details[s].append((gameidx, botid))
+				for s in details.iterkeys():
+					print "  {0}:".format(s),
+					print ', '.join(["{0}:{1}".format(gameidx,botid) for gameidx,botid in details[s]])
 				print
 
 	statusfields = [(s, max(10, len(s))) for s in status]
