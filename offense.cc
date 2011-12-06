@@ -86,7 +86,7 @@ void Offense::update_hill_distance(uint hillidx)
 	d.updatequeue.push_back(ehd->pos);
 
 	while (queue_head < d.updatequeue.size()) {
-		const Location & cur = d.updatequeue[queue_head++];
+		const Location cur = d.updatequeue[queue_head++];
 		uint dist = ehd->dist[cur] + 1;
 
 		for (int dir = 0; dir < TDIRECTIONS; ++dir) {
