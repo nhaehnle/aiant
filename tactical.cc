@@ -1234,7 +1234,7 @@ bool Tactical::evaluate_new_moves()
 
 			enemyvalue += mydeaths * ValueKill + enemydeaths * ValueLoss;
 			if ((enemydeaths || enemymove.nrcollided) && !mydeaths)
-				myvalue += ValueUselessDeath;
+				enemyvalue += ValueUselessDeath;
 
 			int myposvalue = evaluate_ant_positions(mymove, true);
 			int enemyposvalue = evaluate_ant_positions(enemymove, false);
