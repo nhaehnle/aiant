@@ -895,8 +895,11 @@ struct Improve {
 
 	void compute_retreat_dir(const Location & orig, int origdir, const Location & attacker, int & noattackdir, int & awaydir)
 	{
+		const PlayerMove & mymove = themymove();
 		const PlayerMove & enemymove = theenemymove();
 
+		bool attackdirblocked = true;
+		bool awaydirblocked = true;
 		noattackdir = origdir;
 		awaydir = origdir;
 
@@ -913,9 +916,11 @@ struct Improve {
 				continue;
 
 			if ((enemymove.map[n] & PlayerMove::AttackMask) == 0) {
-				noattackdir = dir;
-				if (awaydir != origdir)
-					break;
+				if (attackdirblocked) {
+					noattackdir = dir;
+					if (!(mymove.map[n] & PlayerMove::AntsMask))
+						attackdirblocked = false;
+				}
 			} else {
 				Location kernel
 					(attacker.row - n.row + AttackKernelRadius,
@@ -925,9 +930,11 @@ struct Improve {
 					 kernel.col < 0 || kernel.col >= AttackKernelSize ||
 					 !AttackKernel[kernel.row][kernel.col])
 				{
-					awaydir = dir;
-					if (noattackdir != origdir)
-						break;
+					if (awaydirblocked) {
+						awaydir = dir;
+						if (!(mymove.map[n] & PlayerMove::AntsMask))
+							awaydirblocked = false;
+					}
 				}
 			}
 		}
