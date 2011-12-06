@@ -137,7 +137,8 @@ SymmetryFinder::SymmetryFinder(Bot & b) :
 	bot(b),
 	state(b.state),
 	d(*new Data),
-	newwater(false)
+	newwater(false),
+	enemyhillschanged(false)
 {
 }
 
@@ -204,6 +205,7 @@ void SymmetryFinder::add_possible_enemy_hill(const Location & pos)
 	}
 
 	enemy_hills.push_back(pos);
+	enemyhillschanged = true;
 	map[pos] |= MapEnemyHill;
 }
 
@@ -307,6 +309,7 @@ void SymmetryFinder::update_map()
 
 		d.all_enemy_hills.push_back(pos);
 		enemy_hills.push_back(pos);
+		enemyhillschanged = true;
 		map[pos] |= MapEnemyHill;
 		newhills = true;
 	foundenemy: ;
@@ -558,6 +561,7 @@ void SymmetryFinder::check_destroyed_hills()
 		if (map[enemy_hills[idx]] & MapKnownNoHill) {
 			enemy_hills[idx] = enemy_hills.back();
 			enemy_hills.pop_back();
+			enemyhillschanged = true;
 			idx--;
 		}
 	}
@@ -579,6 +583,7 @@ bool SymmetryFinder::have_seen(const Location & center, uint rel) const
 void SymmetryFinder::run()
 {
 	newwater = false;
+	enemyhillschanged = false;
 
 	state.bug << "Symmetry turn " << state.turn << endl;
 

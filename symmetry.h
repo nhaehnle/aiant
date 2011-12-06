@@ -44,6 +44,7 @@ struct SymmetryFinder {
 
 	Map<uint8_t> map;
 	bool newwater;
+	bool enemyhillschanged;
 	std::vector<Location> enemy_hills;
 };
 
