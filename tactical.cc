@@ -893,6 +893,46 @@ struct Improve {
 		return false;
 	}
 
+	void compute_retreat_dir(const Location & orig, int origdir, const Location & attacker, int & noattackdir, int & awaydir)
+	{
+		const PlayerMove & enemymove = theenemymove();
+
+		noattackdir = origdir;
+		awaydir = origdir;
+
+		const int * optdirperm = getoptdirperm();
+		for (int predir = 0; predir < TDIRECTIONS+1; ++predir) {
+			int dir = optdirperm[predir];
+			if (dir == origdir)
+				continue;
+
+			Location n;
+			if (!d.basesm.getneighbouropt(orig, dir, n))
+				continue;
+			if (d.basesm[n] & Submap::Water)
+				continue;
+
+			if ((enemymove.map[n] & PlayerMove::AttackMask) == 0) {
+				noattackdir = dir;
+				if (awaydir != origdir)
+					break;
+			} else {
+				Location kernel
+					(attacker.row - n.row + AttackKernelRadius,
+					 attacker.col - n.col + AttackKernelRadius);
+				if
+					(kernel.row < 0 || kernel.row >= AttackKernelSize ||
+					 kernel.col < 0 || kernel.col >= AttackKernelSize ||
+					 !AttackKernel[kernel.row][kernel.col])
+				{
+					awaydir = dir;
+					if (noattackdir != origdir)
+						break;
+				}
+			}
+		}
+	}
+
 	void do_retreat()
 	{
 		for (uint idx = 0; idx < deaths.size(); ++idx) {
@@ -903,39 +943,10 @@ struct Improve {
 			const Location & other = enemymove.antmoves[death.enemyantidx].pos;
 
 			int origdir = mymove.antmoves[death.myantidx].direction;
-			int alt1dir = origdir;
-			int alt2dir = origdir;
-			const int * optdirperm = getoptdirperm();
-			for (int predir = 0; predir < TDIRECTIONS+1; ++predir) {
-				int dir = optdirperm[predir];
-				if (dir == origdir)
-					continue;
+			int alt1dir;
+			int alt2dir;
 
-				Location n;
-				if (!d.basesm.getneighbouropt(orig, dir, n))
-					continue;
-				if (d.basesm[n] & Submap::Water)
-					continue;
-
-				if ((enemymove.map[n] & PlayerMove::AttackMask) == 0) {
-					alt1dir = dir;
-					if (alt2dir != origdir)
-						break;
-				} else {
-					Location kernel
-						(other.row - n.row + AttackKernelRadius,
-						 other.col - n.col + AttackKernelRadius);
-					if
-						(kernel.row < 0 || kernel.row >= AttackKernelSize ||
-						 kernel.col < 0 || kernel.col >= AttackKernelSize ||
-						 !AttackKernel[kernel.row][kernel.col])
-					{
-						alt2dir = dir;
-						if (alt1dir != origdir)
-							break;
-					}
-				}
-			}
+			compute_retreat_dir(orig, origdir, other, alt1dir, alt2dir);
 
 			if (alt1dir != origdir) {
 				NewMove nm(t, myidx, "retreat: unattacked field");
@@ -947,6 +958,35 @@ struct Improve {
 				if (pushmove(nm, death.myantidx, alt2dir))
 					nm.commit();
 			}
+		}
+
+		if (deaths.size() >= 2) {
+			NewMove nm(t, myidx, "retreat: all at once");
+			const PlayerMove & mymove = themymove();
+			const PlayerMove & enemymove = theenemymove();
+
+			for (uint idx = 0; idx < deaths.size(); ++idx) {
+				Death & death = deaths[idx];
+				const Location & orig = d.myants[death.myantidx];
+				const Location & other = enemymove.antmoves[death.enemyantidx].pos;
+
+				int origdir = mymove.antmoves[death.myantidx].direction;
+				int alt1dir;
+				int alt2dir;
+
+				compute_retreat_dir(orig, origdir, other, alt1dir, alt2dir);
+
+				bool moved = false;
+				if (alt1dir != origdir) {
+					if (pushmove(nm, death.myantidx, alt1dir))
+						moved = true;
+				}
+				if (!moved && alt2dir != origdir) {
+					pushmove(nm, death.myantidx, alt2dir);
+				}
+			}
+
+			nm.commit();
 		}
 	}
 
