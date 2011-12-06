@@ -8,13 +8,20 @@
 
 using namespace std;
 
+struct Zoc::Data {
+	vector<Location> oldenemies;
+	vector<Location> queue;
+};
+
 Zoc::Zoc(State & state_) :
-	state(state_)
+	state(state_),
+	d(*new Data)
 {
 }
 
 Zoc::~Zoc()
 {
+	delete &d;
 }
 
 void Zoc::init()
@@ -58,25 +65,25 @@ ostream & operator<<(ostream & out, const Zoc & zoc)
 
 void Zoc::update()
 {
-	std::vector<Location> oldenemies;
+	d.oldenemies.clear();
+	d.queue.clear();
 
 	Location cur;
 	for (cur.row = 0; cur.row < state.rows; ++cur.row) {
 		for (cur.col = 0; cur.col < state.cols; ++cur.col) {
 			Square & sq = state.grid[cur.row][cur.col];
 			if (!sq.isVisible && m_enemy[cur] == 0)
-				oldenemies.push_back(cur);
+				d.oldenemies.push_back(cur);
 		}
 	}
 
 	m_enemy.fill(std::numeric_limits<uint>::max());
 
-	std::queue<Location> open;
-	for (uint idx = 0; idx < oldenemies.size(); ++idx) {
-		cur = oldenemies[idx];
+	for (uint idx = 0; idx < d.oldenemies.size(); ++idx) {
+		cur = d.oldenemies[idx];
 		if (m_enemy[cur] > 0) {
 			m_enemy[cur] = 0;
-			open.push(cur);
+			d.queue.push_back(cur);
 		}
 		for (int dir = 0; dir < TDIRECTIONS; ++dir) {
 			Location n = state.getLocation(cur, dir);
@@ -85,7 +92,7 @@ void Zoc::update()
 				continue;
 			if (!sq.isVisible && m_enemy[n] != 0) {
 				m_enemy[n] = 0;
-				open.push(n);
+				d.queue.push_back(n);
 			}
 		}
 	}
@@ -94,7 +101,7 @@ void Zoc::update()
 		cur = state.enemyAnts[idx];
 		if (m_enemy[cur] > 0) {
 			m_enemy[cur] = 0;
-			open.push(cur);
+			d.queue.push_back(cur);
 		}
 	}
 
@@ -102,13 +109,13 @@ void Zoc::update()
 		cur = state.enemyHills[idx];
 		if (m_enemy[cur] > 0) {
 			m_enemy[cur] = 0;
-			open.push(cur);
+			d.queue.push_back(cur);
 		}
 	}
 
-	while (!open.empty()) {
-		cur = open.front();
-		open.pop();
+	uint queue_head = 0;
+	while (queue_head < d.queue.size()) {
+		cur = d.queue[queue_head++];
 
 		uint dist = m_enemy[cur];
 
@@ -118,24 +125,25 @@ void Zoc::update()
 				continue;
 			if (m_enemy[n] > dist+1) {
 				m_enemy[n] = dist+1;
-				open.push(n);
+				d.queue.push_back(n);
 			}
 		}
 	}
 
 	m_me.fill(std::numeric_limits<uint>::max());
+	d.queue.clear();
+	queue_head = 0;
 
 	for (uint idx = 0; idx < state.myAnts.size(); ++idx) {
 		cur = state.myAnts[idx];
 		if (m_me[cur] > 0) {
 			m_me[cur] = 0;
-			open.push(cur);
+			d.queue.push_back(cur);
 		}
 	}
 
-	while (!open.empty()) {
-		cur = open.front();
-		open.pop();
+	while (queue_head < d.queue.size()) {
+		cur = d.queue[queue_head++];
 
 		uint dist = m_me[cur];
 
@@ -145,7 +153,7 @@ void Zoc::update()
 				continue;
 			if (m_me[n] > dist+1) {
 				m_me[n] = dist+1;
-				open.push(n);
+				d.queue.push_back(n);
 			}
 		}
 	}
