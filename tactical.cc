@@ -175,6 +175,7 @@ struct PlayerMove {
 
 		uint8_t override : 1;
 		uint8_t killed : 1;
+		uint8_t killer : 1;
 		uint8_t sentoffense : 1;
 
 		AntMove(const Location & p, int8_t dir) :
@@ -277,6 +278,16 @@ struct PlayerMove {
 				}
 			}
 			nrcollided--;
+		}
+	}
+
+	void reset_killed()
+	{
+		for (uint idx = 0; idx < antmoves.size(); ++idx) {
+			PlayerMove::AntMove & am = antmoves[idx];
+			am.sentoffense = 0;
+			am.killed = 0;
+			am.killer = 0;
 		}
 	}
 };
@@ -671,20 +682,20 @@ struct Improve {
 		PlayerMove & mymove = themymove();
 		PlayerMove & enemymove = d.enemymoves[enemyidx];
 
+		mymove.reset_killed();
+		enemymove.reset_killed();
+
 		for (uint myantidx = 0; myantidx < mymove.antmoves.size(); ++myantidx) {
 			PlayerMove::AntMove & am = mymove.antmoves[myantidx];
 			if (am.collided || !d.basesm.inside(am.pos))
 				continue;
-
-			am.sentoffense = 0;
-			am.killed = 0;
 
 			uint nrenemies = enemymove.map[am.pos] & PlayerMove::AttackMask;
 			if (nrenemies == 0)
 				continue;
 
 			for (uint enemyantidx = 0; enemyantidx < enemymove.antmoves.size(); ++enemyantidx) {
-				const PlayerMove::AntMove & em = enemymove.antmoves[enemyantidx];
+				PlayerMove::AntMove & em = enemymove.antmoves[enemyantidx];
 				if (em.collided || !d.basesm.inside(em.pos))
 					continue;
 
@@ -701,6 +712,7 @@ struct Improve {
 					continue;
 
 				am.killed = 1;
+				em.killer = 1;
 
 				// ignore deaths that are too far from the center, because we cannot assess them accurately
 				if (d.basesm.eucliddist2(am.pos, Location(Submap::Radius, Submap::Radius)) > TacticalCoreRadius2)
@@ -718,15 +730,12 @@ struct Improve {
 			if (am.collided || !d.basesm.inside(am.pos))
 				continue;
 
-			am.sentoffense = 0;
-			am.killed = 0;
-
 			uint nrenemies = mymove.map[am.pos] & PlayerMove::AttackMask;
 			if (nrenemies == 0)
 				continue;
 
 			for (uint myantidx = 0; myantidx < mymove.antmoves.size(); ++myantidx) {
-				const PlayerMove::AntMove & em = mymove.antmoves[myantidx];
+				PlayerMove::AntMove & em = mymove.antmoves[myantidx];
 				if (em.collided || !d.basesm.inside(em.pos))
 					continue;
 
@@ -743,6 +752,7 @@ struct Improve {
 					continue;
 
 				am.killed = 1;
+				em.killer = 1;
 				break;
 			}
 		}
@@ -1112,7 +1122,7 @@ struct Improve {
 			const PlayerMove & enemymove = theenemymove();
 			const PlayerMove::AntMove & enemyant = enemymove.antmoves[enemyantidx];
 
-			if (enemyant.collided || enemyant.killed || enemyant.sentoffense)
+			if (enemyant.collided || enemyant.sentoffense || (enemyant.killed && !enemyant.killer))
 				continue;
 
 			if (d.basesm.eucliddist2(enemyant.pos, Location(Submap::Radius, Submap::Radius)) > TacticalMidRadius2)
