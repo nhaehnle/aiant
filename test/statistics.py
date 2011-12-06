@@ -101,6 +101,9 @@ def main():
 	for bot in Bots:
 		status.update(bot.status.iterkeys())
 
+	botmap = [i for i in range(len(Bots))]
+	botmap.sort(cmp=lambda i,j: cmp(Bots[i].name, Bots[j].name))
+
 	print "{0} games played".format(NrGames)
 	print
 
@@ -121,7 +124,7 @@ def main():
 	statusfields = [(s, max(10, len(s))) for s in status]
 	print "Bots", ' ' * maxnamelen, ' '.join(["{0:>{1}}".format(s, l) for s, l in statusfields])
 	for idx in range(len(Bots)):
-		bot = Bots[idx]
+		bot = Bots[botmap[idx]]
 		print "{0:>3}: {bot.name:<{maxnamelen}}".format(idx+1, **locals()),
 		for s, l in statusfields:
 			count = 0
@@ -140,7 +143,7 @@ def main():
 			if idx == otheridx:
 				print "---",
 			else:
-				results = Bots[idx].getmatches(otheridx)
+				results = Bots[botmap[idx]].getmatches(botmap[otheridx])
 				s = sum(results)
 				if s < 5:
 					print "???",
