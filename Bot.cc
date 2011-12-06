@@ -156,7 +156,7 @@ void Bot::makeMoves()
 	state.bug << state << endl;
 
 	m_zoc.update();
-	m_symmetry.run();
+	//m_symmetry.run();
 
 	//
 	m_ants.clear();
@@ -180,7 +180,7 @@ void Bot::makeMoves()
 	m_scout.run();
 
 	//
-	m_offense.run();
+	//m_offense.run();
 
 	//
 	for (uint antidx = 0; antidx < state.myAnts.size(); ++antidx) {
