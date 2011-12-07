@@ -38,7 +38,7 @@ struct Scout::Data {
 	};
 	priority_queue<LocationHeight> updatequeue;
 
-	Data()
+	Data() : nrscouts(0)
 	{
 	}
 };
