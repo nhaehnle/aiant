@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <cstdlib>
 #include <cmath>
+#include <limits>
 #include <string>
 #include <vector>
 #include <queue>
@@ -181,6 +182,9 @@ extern uint32_t rngstate;
 inline uint32_t fastrng() {
 	rngstate = rngstate * 1664525 + 1013904223; // numerical recipes
 	return rngstate;
+}
+inline double fastrngd() {
+	return (double)fastrng() / (double)std::numeric_limits<uint32_t>::max();
 }
 
 inline const int * getdirperm() {
