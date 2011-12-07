@@ -16,6 +16,10 @@ using namespace std;
 
 /// Tweakable parameters
 //@{
+static const unsigned int TacticalClose = 2;
+static const unsigned int TacticalMid = 3;
+static const unsigned int TacticalFar = 5;
+
 static const int MaxFoodDistance = 16;
 static const int FoodFactor = 10;
 static const int MaxZocValue = 16;
@@ -433,6 +437,11 @@ Tactical::Tactical(Bot & bot_) :
 Tactical::~Tactical()
 {
 	delete &d;
+}
+
+void Tactical::init()
+{
+
 }
 
 void Tactical::gensubmap_field(Submap & sm, const Location & local, const Location & global)
@@ -1325,6 +1334,11 @@ bool Tactical::evaluate_new_moves()
 
 void Tactical::make_moves(const Location & center)
 {
+	d.myants.clear();
+	d.enemyants.clear();
+	d.mymoves.clear();
+	d.enemymoves.clear();
+
 	d.ismyperspective = true;
 	gensubmap(d.basesm, center);
 	compute_foodpotential(d.basesm, d.foodpotential);
@@ -1384,6 +1398,53 @@ void Tactical::make_moves(const Location & center)
 			ant.hastactical = true;
 			state.bug << "  Ant at " << ant.where
 				<< " tactical move to " << state.getLocation(ant.where, dir) << " (" << cdir(ant.direction) << ")" << endl;
+		}
+	}
+}
+
+void Tactical::run()
+{
+	vector<uint> tactical_close;
+	vector<uint> tactical_mid;
+	vector<uint> tactical_far;
+
+	for (uint antidx = 0; antidx < bot.m_ants.size(); ++antidx) {
+		Ant & ant = bot.m_ants[antidx];
+		uint enemydist = bot.m_zoc.m_enemy[ant.where];
+		if (enemydist <= TacticalFar) {
+			if (enemydist <= TacticalClose)
+				tactical_close.push_back(antidx);
+			else if (enemydist <= TacticalMid)
+				tactical_mid.push_back(antidx);
+			else
+				tactical_far.push_back(antidx);
+		}
+	}
+
+	while (!tactical_close.empty()) {
+		Ant & ant = bot.m_ants[tactical_close.back()];
+		tactical_close.pop_back();
+		if (!ant.hastactical) {
+			make_moves(ant.where);
+			ant.hastactical = true;
+		}
+	}
+
+	while (!tactical_mid.empty()) {
+		Ant & ant = bot.m_ants[tactical_mid.back()];
+		tactical_mid.pop_back();
+		if (!ant.hastactical) {
+			make_moves(ant.where);
+			ant.hastactical = true;
+		}
+	}
+
+	while (!tactical_far.empty()) {
+		Ant & ant = bot.m_ants[tactical_far.back()];
+		tactical_far.pop_back();
+		if (!ant.hastactical) {
+			make_moves(ant.where);
+			ant.hastactical = true;
 		}
 	}
 }

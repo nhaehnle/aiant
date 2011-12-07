@@ -3,6 +3,8 @@
 
 #include <stdlib.h>
 
+#include "module.h"
+
 struct Bot;
 struct Location;
 struct Outcome;
@@ -12,9 +14,12 @@ struct BaseSubmap;
 struct Submap;
 struct State;
 
-struct Tactical {
+struct Tactical : Module {
 	Tactical(Bot & bot_);
 	~Tactical();
+
+	void init();
+	void run();
 
 	void gensubmap(Submap & sm, const Location & center);
 	void gensubmap_field(Submap & sm, const Location & local, const Location & global);
@@ -23,7 +28,6 @@ struct Tactical {
 	void make_moves(const Location & center);
 
 	void generate_initmoves();
-	void complete_move(PlayerMove & pm);
 	void compute_deaths(PlayerMove & pm, PlayerMove & enemymove, int & mydeaths, int & enemydeaths);
 	int evaluate_ant_positions(PlayerMove & pm, bool myperspective);
 	bool evaluate_new_moves();
@@ -34,10 +38,6 @@ struct Tactical {
 
 	struct Data;
 	Data & d;
-
-private:
-	Tactical(const Tactical &);
-	Tactical & operator=(const Tactical &);
 };
 
 #endif // TACTICAL_H

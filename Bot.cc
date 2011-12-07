@@ -13,9 +13,6 @@
 
 using namespace std;
 
-static const unsigned int TacticalClose = 2;
-static const unsigned int TacticalMid = 3;
-static const unsigned int TacticalFar = 5;
 static const uint KeepDirpermTurns = 64;
 
 
@@ -41,13 +38,15 @@ Bot::Bot() :
 	m_scout(*new Scout(*this)),
 	m_hilldefense(*new HillDefense(*this)),
 	m_opportunisticattack(*new OpportunisticAttack(*this)),
-	m_offense(*new Offense(*this))
+	m_offense(*new Offense(*this)),
+	m_tactical(*new Tactical(*this))
 {
 
 }
 
 Bot::~Bot()
 {
+	delete &m_tactical;
 	delete &m_offense;
 	delete &m_opportunisticattack;
 	delete &m_hilldefense;
@@ -76,6 +75,7 @@ void Bot::playGame()
 	m_hilldefense.init();
 	m_opportunisticattack.init();
 	m_offense.init();
+	m_tactical.init();
 
 	//continues making moves while the game is not over
 	while(cin >> state)
@@ -260,52 +260,7 @@ void Bot::makeMoves()
 	}
 
 	//
-	vector<uint> tactical_close;
-	vector<uint> tactical_mid;
-	vector<uint> tactical_far;
-
-	for (uint antidx = 0; antidx < m_ants.size(); ++antidx) {
-		Ant & ant = m_ants[antidx];
-		uint enemydist = m_zoc.m_enemy[ant.where];
-		if (enemydist <= TacticalFar) {
-			if (enemydist <= TacticalClose)
-				tactical_close.push_back(antidx);
-			else if (enemydist <= TacticalMid)
-				tactical_mid.push_back(antidx);
-			else
-				tactical_far.push_back(antidx);
-		}
-	}
-
-	while (!tactical_close.empty()) {
-		Ant & ant = m_ants[tactical_close.back()];
-		tactical_close.pop_back();
-		if (!ant.hastactical) {
-			Tactical tactical(*this);
-			tactical.make_moves(ant.where);
-			ant.hastactical = true;
-		}
-	}
-
-	while (!tactical_mid.empty()) {
-		Ant & ant = m_ants[tactical_mid.back()];
-		tactical_mid.pop_back();
-		if (!ant.hastactical) {
-			Tactical tactical(*this);
-			tactical.make_moves(ant.where);
-			ant.hastactical = true;
-		}
-	}
-
-	while (!tactical_far.empty()) {
-		Ant & ant = m_ants[tactical_far.back()];
-		tactical_far.pop_back();
-		if (!ant.hastactical) {
-			Tactical tactical(*this);
-			tactical.make_moves(ant.where);
-			ant.hastactical = true;
-		}
-	}
+	m_tactical.run();
 
 	//
 	make_moves();

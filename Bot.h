@@ -5,6 +5,7 @@
 
 struct FoodSeeker;
 struct HillDefense;
+struct Module;
 struct Offense;
 struct OpportunisticAttack;
 struct Scout;
@@ -54,6 +55,7 @@ struct Bot
 	HillDefense & m_hilldefense;
 	OpportunisticAttack & m_opportunisticattack;
 	Offense & m_offense;
+	Module & m_tactical;
 	std::vector<Ant> m_ants;
 };
 
