@@ -16,9 +16,11 @@ using namespace std;
 
 /// Tweakable parameters
 //@{
-static const unsigned int TacticalClose = 2;
-static const unsigned int TacticalMid = 3;
-static const unsigned int TacticalFar = 5;
+static const uint MaxEval = 1000; ///< max number of moves to evaluate
+
+static const uint AttackableManhattanDistance = 5; ///< max distance for an ant to trigger theater creation
+static const uint TheaterCoreInfinity = 2; ///< max infinity norm distance for an ant to "belong" to the theater
+static const uint MaxAttackRadius2 = 34; ///< radius up to which we consider attacking an enemy (this is the maximum distance a core ant can possibly attack)
 
 static const int MaxFoodDistance = 16;
 static const int FoodFactor = 10;
@@ -30,12 +32,6 @@ static const int ValueKill = 5000;
 static const int ValueLoss = -6000;
 static const int ValueEat = 1000;
 //static const int ValueUselessDeath = -1500;
-
-static const uint MaxEval = 50; ///< max number of moves to evaluate
-static const uint MaxIdleDist2 = 10;
-
-static const uint TacticalCoreRadius2 = 26;
-static const uint TacticalMidRadius2 = 42;
 //@}
 
 // area in which enemies are counted as attackers
@@ -97,6 +93,12 @@ struct BaseSubmap {
 		int dr = a.row - b.row;
 		int dc = a.col - b.col;
 		return (dr * dr) + (dc * dc);
+	}
+
+	static uint infinitydist(const Location & a, const Location & b) {
+		int dr = a.row - b.row;
+		int dc = a.col - b.col;
+		return max(abs(dr), abs(dc));
 	}
 };
 
@@ -177,14 +179,13 @@ struct PlayerMove {
 		uint8_t collided : 1; // death by collision
 		uint8_t collider : 1; // we ran into the other guy; oops
 
-		uint8_t override : 1;
 		uint8_t killed : 1;
 		uint8_t killer : 1;
 		uint8_t sentoffense : 1;
 
 		AntMove(const Location & p, int8_t dir) :
 			pos(p), direction(dir),
-			collided(0), collider(0), override(0), killed(0), sentoffense(0)
+			collided(0), collider(0), killed(0), sentoffense(0)
 		{}
 	};
 
@@ -201,10 +202,15 @@ struct PlayerMove {
 	int worstopposingidx;
 
 	PlayerMove() {
+		reset();
+	}
+
+	void reset() {
 		hash = 0;
 		nrcollided = 0;
 		worstvalue = numeric_limits<int>::max();
 		worstopposingidx = -1;
+		antmoves.clear();
 	}
 
 	void computehash() {
@@ -296,8 +302,8 @@ struct PlayerMove {
 	}
 };
 
-
-struct Tactical::Data {
+struct Tactical::Theater {
+	bool needupdate;
 	bool ismyperspective;
 	Location offset;
 	Submap basesm;
@@ -305,63 +311,147 @@ struct Tactical::Data {
 	vector<Location> enemyants;
 	BaseSubmap<unsigned int> foodpotential;
 
-	vector<PlayerMove> mymoves;
-	vector<PlayerMove> enemymoves;
+	vector<PlayerMove *> mymoves;
+	vector<PlayerMove *> enemymoves;
 	uint myevaluated;
 	uint enemyevaluated;
 
-	void flipsides()
-	{
-		ismyperspective = !ismyperspective;
-		basesm.flipsides();
-		swap(myants, enemyants);
-		swap(mymoves, enemymoves);
-		swap(myevaluated, enemyevaluated);
-	}
+	Theater(Data & d) {reset(d);}
 
-	uint mybestmove()
-	{
-		uint bestidx = 0;
-		int bestvalue = numeric_limits<int>::min();
-
-		for (uint idx = 0; idx < mymoves.size(); ++idx) {
-			int value = mymoves[idx].worstvalue;
-			if (value > bestvalue) {
-				bestvalue = value;
-				bestidx = idx;
-			}
-		}
-
-		return bestidx;
-	}
-
-	uint enemybestmove()
-	{
-		uint bestidx = 0;
-		int bestvalue = numeric_limits<int>::min();
-
-		for (uint idx = 0; idx < enemymoves.size(); ++idx) {
-			int value = enemymoves[idx].worstvalue;
-			if (value > bestvalue) {
-				bestvalue = value;
-				bestidx = idx;
-			}
-		}
-
-		return bestidx;
-	}
-
+	void reset(Data & d);
+	void flipsides();
+	uint mybestmove();
+	uint enemybestmove();
 };
 
+struct Tactical::ShadowAnt {
+	Location pos;
+	bool hastactical;
+};
+
+struct Tactical::Data {
+	vector<ShadowAnt> myshadowants;
+	vector<Theater *> theaters;
+	uint nrmoves;
+
+	vector<PlayerMove *> unusedmoves;
+	vector<Theater *> unusedtheaters;
+
+	Data() {reset();}
+	~Data() {
+		reset();
+
+		while (!unusedtheaters.empty()) {
+			delete unusedtheaters.back();
+			unusedtheaters.pop_back();
+		}
+		while (!unusedmoves.empty()) {
+			delete unusedmoves.back();
+			unusedmoves.pop_back();
+		}
+	}
+
+	void reset() {
+		nrmoves = 0;
+		myshadowants.clear();
+
+		while (!theaters.empty()) {
+			Theater * theater = theaters.back();
+			theaters.pop_back();
+			theater->reset(*this);
+			unusedtheaters.push_back(theater);
+		}
+	}
+
+	PlayerMove * allocmove() {
+		if (!unusedmoves.empty()) {
+			PlayerMove * pm = unusedmoves.back();
+			unusedmoves.pop_back();
+			pm->reset();
+			return pm;
+		}
+		return new PlayerMove;
+	}
+
+	Theater * alloctheater() {
+		if (!unusedtheaters.empty()) {
+			Theater * th = unusedtheaters.back();
+			unusedtheaters.pop_back();
+			return th;
+		}
+		return new Theater(*this);
+	}
+};
+
+void Tactical::Theater::reset(Data & d)
+{
+	needupdate = true;
+	ismyperspective = true;
+	myants.clear();
+	enemyants.clear();
+
+	while (!mymoves.empty()) {
+		d.unusedmoves.push_back(mymoves.back());
+		mymoves.pop_back();
+	}
+	while (!enemymoves.empty()) {
+		d.unusedmoves.push_back(enemymoves.back());
+		enemymoves.pop_back();
+	}
+	myevaluated = 0;
+	enemyevaluated = 0;
+}
+
+void Tactical::Theater::flipsides()
+{
+	ismyperspective = !ismyperspective;
+	basesm.flipsides();
+	swap(myants, enemyants);
+	swap(mymoves, enemymoves);
+	swap(myevaluated, enemyevaluated);
+}
+
+uint Tactical::Theater::mybestmove()
+{
+	uint bestidx = 0;
+	int bestvalue = numeric_limits<int>::min();
+
+	for (uint idx = 0; idx < mymoves.size(); ++idx) {
+		int value = mymoves[idx]->worstvalue;
+		if (value > bestvalue) {
+			bestvalue = value;
+			bestidx = idx;
+		}
+	}
+
+	return bestidx;
+}
+
+uint Tactical::Theater::enemybestmove()
+{
+	uint bestidx = 0;
+	int bestvalue = numeric_limits<int>::min();
+
+	for (uint idx = 0; idx < enemymoves.size(); ++idx) {
+		int value = enemymoves[idx]->worstvalue;
+		if (value > bestvalue) {
+			bestvalue = value;
+			bestidx = idx;
+		}
+	}
+
+	return bestidx;
+}
+
 struct Outcome {
-	Tactical::Data & d;
+	Tactical::Theater & th;
 	BaseSubmap<char> map;
 
-	Outcome(Tactical & t, int myidx, int enemyidx) : d(t.d) {
+	Outcome(Tactical::Theater & th, int myidx, int enemyidx) : th(th) {
 		Location local;
 		for (local.row = 0; local.row < Submap::Size; ++local.row) {
 			for (local.col = 0; local.col < Submap::Size; ++local.col) {
-				unsigned char field = d.basesm[local];
+				unsigned char field = th.basesm[local];
 
 				if (field & Submap::Water) {
 					map[local] = '%';
@@ -373,8 +463,8 @@ struct Outcome {
 					else
 						map[local] = 'h';
 				} else {
-					uint8_t myfield = d.mymoves[myidx].map[local];
-					uint8_t enemyfield = d.enemymoves[enemyidx].map[local];
+					uint8_t myfield = th.mymoves[myidx]->map[local];
+					uint8_t enemyfield = th.enemymoves[enemyidx]->map[local];
 
 					if (myfield & PlayerMove::AntsMask) {
 						map[local] = 'Q' + (myfield >> PlayerMove::AntsShift);
@@ -396,14 +486,14 @@ struct Outcome {
 			}
 		}
 
-		markmove(d.mymoves[myidx], "ADC");
-		markmove(d.enemymoves[enemyidx], "adc");
+		markmove(*th.mymoves[myidx], "ADC");
+		markmove(*th.enemymoves[enemyidx], "adc");
 	}
 
 	void markmove(PlayerMove & move, const char * markers) {
 		for (uint antidx = 0; antidx < move.antmoves.size(); ++antidx) {
 			PlayerMove::AntMove & am = move.antmoves[antidx];
-			if (!d.basesm.inside(am.pos))
+			if (!th.basesm.inside(am.pos))
 				continue;
 
 			if (am.collided)
@@ -537,72 +627,16 @@ struct CloserToCenterCompare {
 	}
 };
 
-void Tactical::generate_initmoves()
-{
-	d.mymoves.push_back(PlayerMove());
-	d.enemymoves.push_back(PlayerMove());
-	d.mymoves[0].map.fill(0);
-	d.enemymoves[0].map.fill(0);
-
-	// collect all ants and sort by distance to center
-	Location local;
-	for (local.row = 0; local.row < Submap::Size; ++local.row) {
-		for (local.col = 0; local.col < Submap::Size; ++local.col) {
-			unsigned char field = d.basesm[local];
-
-			if (!(field & Submap::Ant))
-				continue;
-
-			if (field & Submap::Enemy) {
-				d.enemyants.push_back(local);
-			} else {
-				d.myants.push_back(local);
-			}
-		}
-	}
-
-	sort(d.myants.begin(), d.myants.end(), CloserToCenterCompare());
-	sort(d.enemyants.begin(), d.enemyants.end(), CloserToCenterCompare());
-
-	// Fill in default moves
-	d.mymoves[0].antmoves.reserve(d.myants.size());
-	for (uint idx = 0; idx < d.myants.size(); ++idx) {
-		const Location & local = d.myants[idx];
-		Location global
-			((local.row + d.offset.row) % state.rows,
-			 (local.col + d.offset.col) % state.cols);
-		Ant & ant = bot.m_ants[bot.myantidx_at(global)];
-		Location nextlocal;
-		d.basesm.getneighbouropt(local, ant.direction, nextlocal);
-		d.mymoves[0].antmoves.push_back(PlayerMove::AntMove(nextlocal, ant.direction));
-		d.mymoves[0].ant_mark(idx);
-	}
-
-	d.enemymoves[0].antmoves.reserve(d.enemyants.size());
-	for (uint idx = 0; idx < d.enemyants.size(); ++idx) {
-		const Location & local = d.enemyants[idx];
-		d.enemymoves[0].antmoves.push_back(PlayerMove::AntMove(local, -1));
-		d.enemymoves[0].ant_mark(idx);
-	}
-
-	// Finalize the moves
-	d.mymoves[0].computehash();
-	d.enemymoves[0].computehash();
-
-	state.bug << "Init moves" << endl;
-	state.bug << Outcome(*this, 0, 0);
-}
-
 struct NewMove {
-	NewMove(Tactical & t_, uint myidxbase, const char * why) :
-		t(t_), d(t_.d), state(t_.state), shouldcommit(false)
+	NewMove(Tactical & t_, Tactical::Theater & th_, uint myidxbase, const char * why) :
+		t(t_), d(t_.d), th(th_), state(t_.state), shouldcommit(false)
 	{
-		state.bug << "Preliminary insert new move " << d.mymoves.size() << " due to " << why
-			<< " perspective " << (d.ismyperspective ? "mine" : "enemy") << endl;
-		d.mymoves.push_back(PlayerMove());
-		d.mymoves.back() = d.mymoves[myidxbase];
+		state.bug << "Preliminary insert new move " << th.mymoves.size() << " due to " << why
+			<< " perspective " << (th.ismyperspective ? "mine" : "enemy") << endl;
+		th.mymoves.push_back(d.allocmove());
+		*th.mymoves.back() = *th.mymoves[myidxbase];
 
-		PlayerMove & pm = d.mymoves.back();
+		PlayerMove & pm = *th.mymoves.back();
 		pm.worstvalue = numeric_limits<int>::max();
 		pm.worstopposingidx = -1;
 	}
@@ -610,14 +644,17 @@ struct NewMove {
 	~NewMove()
 	{
 		if (!shouldcommit) {
-			d.mymoves.pop_back();
-			state.bug << "Abort new move " << d.mymoves.size() << endl;
+			d.unusedmoves.push_back(th.mymoves.back());
+			th.mymoves.pop_back();
+			state.bug << "Abort new move " << th.mymoves.size() << endl;
 		} else {
-			state.bug << "Commit new move " << (d.mymoves.size() - 1) << endl;
+			state.bug << "Commit new move " << (th.mymoves.size() - 1) << endl;
+			th.needupdate = true;
+			d.nrmoves++;
 		}
 	}
 
-	PlayerMove & move() {return d.mymoves.back();}
+	PlayerMove & move() {return *th.mymoves.back();}
 
 	void antmove(uint myantidx, int direction)
 	{
@@ -626,8 +663,7 @@ struct NewMove {
 
 		PlayerMove::AntMove & am = pm.antmoves[myantidx];
 		am.direction = direction;
-		d.basesm.getneighbouropt(d.myants[myantidx], direction, am.pos);
-		am.override = 1;
+		th.basesm.getneighbouropt(th.myants[myantidx], direction, am.pos);
 
 		pm.ant_mark(myantidx);
 
@@ -641,8 +677,8 @@ struct NewMove {
 		PlayerMove & pm = move();
 		pm.computehash();
 
-		for (uint idx = 0; idx < d.mymoves.size() - 1; ++idx) {
-			PlayerMove & other = d.mymoves[idx];
+		for (uint idx = 0; idx < th.mymoves.size() - 1; ++idx) {
+			PlayerMove & other = *th.mymoves[idx];
 			if (other.hash != pm.hash)
 				continue;
 
@@ -662,6 +698,7 @@ struct NewMove {
 
 	Tactical & t;
 	Tactical::Data & d;
+	Tactical::Theater & th;
 	State & state;
 	bool shouldcommit;
 };
@@ -669,6 +706,7 @@ struct NewMove {
 struct Improve {
 	Tactical & t;
 	Tactical::Data & d;
+	Tactical::Theater & th;
 	State & state;
 	uint myidx;
 	uint enemyidx;
@@ -680,8 +718,8 @@ struct Improve {
 
 	vector<Death> deaths;
 
-	Improve(Tactical & t_, uint myidx_, uint enemyidx_) :
-		t(t_), d(t_.d), state(t_.state),
+	Improve(Tactical & t_, Tactical::Theater & th_, uint myidx_, uint enemyidx_) :
+		t(t_), d(t_.d), th(th_), state(t_.state),
 		myidx(myidx_), enemyidx(enemyidx_)
 	{
 	}
@@ -689,14 +727,14 @@ struct Improve {
 	void compute_deaths()
 	{
 		PlayerMove & mymove = themymove();
-		PlayerMove & enemymove = d.enemymoves[enemyidx];
+		PlayerMove & enemymove = theenemymove();
 
 		mymove.reset_killed();
 		enemymove.reset_killed();
 
 		for (uint myantidx = 0; myantidx < mymove.antmoves.size(); ++myantidx) {
 			PlayerMove::AntMove & am = mymove.antmoves[myantidx];
-			if (am.collided || !d.basesm.inside(am.pos))
+			if (am.collided || !th.basesm.inside(am.pos))
 				continue;
 
 			uint nrenemies = enemymove.map[am.pos] & PlayerMove::AttackMask;
@@ -705,7 +743,7 @@ struct Improve {
 
 			for (uint enemyantidx = 0; enemyantidx < enemymove.antmoves.size(); ++enemyantidx) {
 				PlayerMove::AntMove & em = enemymove.antmoves[enemyantidx];
-				if (em.collided || !d.basesm.inside(em.pos))
+				if (em.collided || !th.basesm.inside(em.pos))
 					continue;
 
 				Location kernel
@@ -724,7 +762,7 @@ struct Improve {
 				em.killer = 1;
 
 				// ignore deaths that are too far from the center, because we cannot assess them accurately
-				if (d.basesm.eucliddist2(am.pos, Location(Submap::Radius, Submap::Radius)) > TacticalCoreRadius2)
+				if (th.basesm.eucliddist2(am.pos, Location(Submap::Radius, Submap::Radius)) > MaxAttackRadius2)
 					break;
 
 				deaths.push_back(Death());
@@ -736,7 +774,7 @@ struct Improve {
 
 		for (uint enemyantidx = 0; enemyantidx < enemymove.antmoves.size(); ++enemyantidx) {
 			PlayerMove::AntMove & am = enemymove.antmoves[enemyantidx];
-			if (am.collided || !d.basesm.inside(am.pos))
+			if (am.collided || !th.basesm.inside(am.pos))
 				continue;
 
 			uint nrenemies = mymove.map[am.pos] & PlayerMove::AttackMask;
@@ -745,7 +783,7 @@ struct Improve {
 
 			for (uint myantidx = 0; myantidx < mymove.antmoves.size(); ++myantidx) {
 				PlayerMove::AntMove & em = mymove.antmoves[myantidx];
-				if (em.collided || !d.basesm.inside(em.pos))
+				if (em.collided || !th.basesm.inside(em.pos))
 					continue;
 
 				Location kernel
@@ -769,7 +807,7 @@ struct Improve {
 
 	void avoid_collisions()
 	{
-		NewMove nm(t, myidx, "collision avoidance");
+		NewMove nm(t, th, myidx, "collision avoidance");
 		const PlayerMove & mymove = themymove();
 		const PlayerMove & enemymove = theenemymove();
 
@@ -784,15 +822,15 @@ struct Improve {
 #define checkacceptable(label) \
 	do { \
 		Location to; \
-		if (!d.basesm.getneighbouropt(from, dir, to)) break; \
-		if (d.basesm[to] & Submap::Water) break; \
+		if (!th.basesm.getneighbouropt(from, dir, to)) break; \
+		if (th.basesm[to] & Submap::Water) break; \
 		if (nm.move().map[to] & PlayerMove::AntsMask) break; \
 		altdir = dir; \
 		if ((enemymove.map[to] & PlayerMove::AttackMask) == 0) \
 			goto label; \
 	} while(0)
 
-			Location from = d.myants[myantidx];
+			Location from = th.myants[myantidx];
 			int olddir = am.direction;
 			if (olddir == -1) {
 				int altdir = -1;
@@ -852,9 +890,9 @@ struct Improve {
 			}
 
 			uint p = getprime();
-			uint ofs = fastrng() % d.myants.size();
-			for (uint preidx = 0; preidx < d.myants.size(); ++preidx) {
-				uint otheridx = (p * preidx + ofs) % d.myants.size();
+			uint ofs = fastrng() % th.myants.size();
+			for (uint preidx = 0; preidx < th.myants.size(); ++preidx) {
+				uint otheridx = (p * preidx + ofs) % th.myants.size();
 				PlayerMove::AntMove & otherm = nm.move().antmoves[otheridx];
 
 				if (otheridx == myantidx || otherm.pos != am.pos)
@@ -867,8 +905,8 @@ struct Improve {
 #define check_candidate(dir) \
 	do { \
 		Location n; \
-		if (!d.basesm.getneighbouropt(otherm.pos, (dir), n)) break; \
-		if (d.basesm[n] & Submap::Water) break; \
+		if (!th.basesm.getneighbouropt(otherm.pos, (dir), n)) break; \
+		if (th.basesm[n] & Submap::Water) break; \
 		bool collision = nm.move().map[n] & PlayerMove::AntsMask; \
 		bool attacked = theenemymove().map[n] & PlayerMove::AttackMask; \
 		if (!collision && !attacked) { \
@@ -929,9 +967,9 @@ struct Improve {
 				continue;
 
 			Location n;
-			if (!d.basesm.getneighbouropt(orig, dir, n))
+			if (!th.basesm.getneighbouropt(orig, dir, n))
 				continue;
-			if (d.basesm[n] & Submap::Water)
+			if (th.basesm[n] & Submap::Water)
 				continue;
 
 			if ((enemymove.map[n] & PlayerMove::AttackMask) == 0) {
@@ -965,7 +1003,7 @@ struct Improve {
 			const PlayerMove & mymove = themymove();
 			const PlayerMove & enemymove = theenemymove();
 			Death & death = deaths[idx];
-			const Location & orig = d.myants[death.myantidx];
+			const Location & orig = th.myants[death.myantidx];
 			const Location & other = enemymove.antmoves[death.enemyantidx].pos;
 
 			int origdir = mymove.antmoves[death.myantidx].direction;
@@ -975,25 +1013,28 @@ struct Improve {
 			compute_retreat_dir(orig, origdir, other, alt1dir, alt2dir);
 
 			if (alt1dir != origdir) {
-				NewMove nm(t, myidx, "retreat: unattacked field");
+				NewMove nm(t, th, myidx, "retreat: unattacked field");
 				if (pushmove(nm, death.myantidx, alt1dir))
 					nm.commit();
 			}
 			if (alt2dir != origdir && alt2dir != alt1dir) {
-				NewMove nm(t, myidx, "retreat: get away from killer");
+				NewMove nm(t, th, myidx, "retreat: get away from killer");
 				if (pushmove(nm, death.myantidx, alt2dir))
 					nm.commit();
 			}
 		}
 
 		if (deaths.size() >= 2) {
-			NewMove nm(t, myidx, "retreat: all at once");
+			NewMove nm(t, th, myidx, "retreat: all at once");
 			const PlayerMove & mymove = themymove();
 			const PlayerMove & enemymove = theenemymove();
 
-			for (uint idx = 0; idx < deaths.size(); ++idx) {
+			uint p = getprime();
+			uint ofs = fastrng() % deaths.size();
+			for (uint preidx = 0; preidx < deaths.size(); ++preidx) {
+				uint idx = (p * preidx + ofs) % deaths.size();
 				Death & death = deaths[idx];
-				const Location & orig = d.myants[death.myantidx];
+				const Location & orig = th.myants[death.myantidx];
 				const Location & other = enemymove.antmoves[death.enemyantidx].pos;
 
 				int origdir = mymove.antmoves[death.myantidx].direction;
@@ -1025,9 +1066,9 @@ struct Improve {
 
 		enemymove.antmoves[enemyantidx].sentoffense = 1;
 
-		if (!d.basesm.inside(enemypos))
+		if (!th.basesm.inside(enemypos))
 			return;
-		if (d.myants.empty())
+		if (th.myants.empty())
 			return;
 
 		state.bug << "check whether we can send ants to kill " << enemyantidx << " at " << enemypos << endl;
@@ -1041,22 +1082,22 @@ struct Improve {
 		uint bestattacker = numeric_limits<uint>::max();
 
 		uint p = getprime();
-		uint ofs = fastrng() % d.myants.size();
-		for (uint preidx = 0; preidx < d.myants.size(); ++preidx) {
-			uint myantidx = (preidx * p + ofs) % d.myants.size();
-			const Location & orig = d.myants[myantidx];
+		uint ofs = fastrng() % th.myants.size();
+		for (uint preidx = 0; preidx < th.myants.size(); ++preidx) {
+			uint myantidx = (preidx * p + ofs) % th.myants.size();
+			const Location & orig = th.myants[myantidx];
 			const Location & current = mymove.antmoves[myantidx].pos;
 
 			state.bug << "  consider ant " << myantidx << " at " << current << " (from " << orig << ")" << endl;
 
-			if (d.basesm.eucliddist2(current, enemypos) <= AttackRadius2) {
+			if (th.basesm.eucliddist2(current, enemypos) <= AttackRadius2) {
 				state.bug << "    already attacking" << endl;
 				// already attacking the target
 				bestattacker = min(bestattacker, uint(enemymove.map[current] & PlayerMove::AttackMask));
 				continue;
 			}
 
-			if (d.basesm.eucliddist2(orig, enemypos) > AttackNeighboursRadius2)
+			if (th.basesm.eucliddist2(orig, enemypos) > AttackNeighboursRadius2)
 				continue; // too far away
 
 			state.bug << "  close enough" << endl;
@@ -1067,11 +1108,11 @@ struct Improve {
 			for (int predir = 0; predir < TDIRECTIONS + 1; ++predir) {
 				int dir = optdirperm[predir];
 				Location n;
-				if (!d.basesm.getneighbouropt(orig, dir, n))
+				if (!th.basesm.getneighbouropt(orig, dir, n))
 					continue;
-				if (d.basesm.eucliddist2(n, enemypos) > AttackRadius2)
+				if (th.basesm.eucliddist2(n, enemypos) > AttackRadius2)
 					continue;
-				if (d.basesm[n] & Submap::Water)
+				if (th.basesm[n] & Submap::Water)
 					continue;
 
 				state.bug << "  consider moving to " << n << " " << cdir(dir) << endl;
@@ -1094,17 +1135,17 @@ struct Improve {
 		if (!nradditional)
 			return;
 
-		NewMove nm(t, myidx, why);
+		NewMove nm(t, th, myidx, why);
 		for (uint idx = 0; idx < nradditional; ++idx) {
 			state.bug << idx << " nrattackers vs. bestattacker " << nrattackers << " " << bestattacker << endl;
 			if (nrattackers > bestattacker)
 				break;
 
 			uint myantidx = additionalidx[idx];
-			const Location & orig = d.myants[myantidx];
+			const Location & orig = th.myants[myantidx];
 			int dir = additionaldir[idx];
 			Location n;
-			if (!d.basesm.getneighbouropt(orig, dir, n)) {
+			if (!th.basesm.getneighbouropt(orig, dir, n)) {
 				abort();
 			}
 
@@ -1127,14 +1168,14 @@ struct Improve {
 
 	void do_offense()
 	{
-		for (uint enemyantidx = 0; enemyantidx < d.enemyants.size(); ++enemyantidx) {
+		for (uint enemyantidx = 0; enemyantidx < th.enemyants.size(); ++enemyantidx) {
 			const PlayerMove & enemymove = theenemymove();
 			const PlayerMove::AntMove & enemyant = enemymove.antmoves[enemyantidx];
 
 			if (enemyant.collided || enemyant.sentoffense || (enemyant.killed && !enemyant.killer))
 				continue;
 
-			if (d.basesm.eucliddist2(enemyant.pos, Location(Submap::Radius, Submap::Radius)) > TacticalMidRadius2)
+			if (th.basesm.eucliddist2(enemyant.pos, Location(Submap::Radius, Submap::Radius)) > MaxAttackRadius2)
 				continue;
 
 			send_to_kill(enemyantidx, "offense");
@@ -1144,12 +1185,12 @@ struct Improve {
 	void do_improve()
 	{
 		state.bug << "improve " << myidx << " vs " << enemyidx
-			<< " perspective: " << (d.ismyperspective ? "mine" : "enemy") << endl;
+			<< " perspective: " << (th.ismyperspective ? "mine" : "enemy") << endl;
 
 		//
 		compute_deaths();
 
-		state.bug << Outcome(t, myidx, enemyidx);
+		state.bug << Outcome(th, myidx, enemyidx);
 
 		//
 		if (themymove().nrcollided) {
@@ -1166,21 +1207,21 @@ struct Improve {
 		do_offense();
 	}
 
-	PlayerMove & themymove() const {return d.mymoves[myidx];}
-	PlayerMove & theenemymove() const {return d.enemymoves[enemyidx];}
+	PlayerMove & themymove() const {return *th.mymoves[myidx];}
+	PlayerMove & theenemymove() const {return *th.enemymoves[enemyidx];}
 };
 
 /**
  * Look at the outcome of myidx move vs enemyidx move, and try to generate some better
  * alternative moves for myself.
  */
-void Tactical::improve(uint myidx, uint enemyidx)
+void Tactical::improve(uint theateridx, uint myidx, uint enemyidx)
 {
-	Improve imp(*this, myidx, enemyidx);
+	Improve imp(*this, *d.theaters[theateridx], myidx, enemyidx);
 	imp.do_improve();
 }
 
-int Tactical::evaluate_ant_positions(PlayerMove & mymove, bool myperspective)
+int Tactical::evaluate_ant_positions(Theater & th, PlayerMove & mymove, bool myperspective)
 {
 	int value = 0;
 	uint8_t enemyflag = myperspective ? Submap::Enemy : Submap::Mine;
@@ -1191,8 +1232,8 @@ int Tactical::evaluate_ant_positions(PlayerMove & mymove, bool myperspective)
 			continue;
 
 		Location global
-			((am.pos.row + d.offset.row + state.rows) % state.rows,
-			 (am.pos.col + d.offset.col + state.cols) % state.cols);
+			((am.pos.row + th.offset.row + state.rows) % state.rows,
+			 (am.pos.col + th.offset.col + state.cols) % state.cols);
 
 		if (!myperspective) {
 			value += (MaxZocValue - min(bot.m_zoc.m_me[global], uint(MaxZocValue))) * ZocFactor;
@@ -1200,19 +1241,19 @@ int Tactical::evaluate_ant_positions(PlayerMove & mymove, bool myperspective)
 			value += (MaxZocValue - min(bot.m_zoc.m_enemy[global], uint(MaxZocValue))) * ZocFactor;
 		}
 
-		if (d.basesm.inside(am.pos)) {
-			value += d.foodpotential[am.pos] * FoodFactor;
+		if (th.basesm.inside(am.pos)) {
+			value += th.foodpotential[am.pos] * FoodFactor;
 
-			if ((d.basesm[am.pos] & (Submap::Hill | enemyflag)) == (Submap::Hill | enemyflag))
+			if ((th.basesm[am.pos] & (Submap::Hill | enemyflag)) == (Submap::Hill | enemyflag))
 				value += HillValue;
 		}
 
 		for (int dir = 0; dir < TDIRECTIONS; ++dir) {
 			Location n;
-			if (!d.basesm.getneighbour(am.pos, dir, n))
+			if (!th.basesm.getneighbour(am.pos, dir, n))
 				continue;
 
-			if ((d.basesm[n] & (Submap::Hill | enemyflag)) == (Submap::Hill | enemyflag))
+			if ((th.basesm[n] & (Submap::Hill | enemyflag)) == (Submap::Hill | enemyflag))
 				value += HillValue;
 		}
 	}
@@ -1221,11 +1262,11 @@ int Tactical::evaluate_ant_positions(PlayerMove & mymove, bool myperspective)
 }
 
 
-void Tactical::compute_deaths(PlayerMove & mymove, PlayerMove & enemymove, int & mydeaths, int & enemydeaths)
+void Tactical::compute_deaths(Theater & th, PlayerMove & mymove, PlayerMove & enemymove, int & mydeaths, int & enemydeaths)
 {
 	for (uint myantidx = 0; myantidx < mymove.antmoves.size(); ++myantidx) {
 		PlayerMove::AntMove & am = mymove.antmoves[myantidx];
-		if (am.collided || !d.basesm.inside(am.pos))
+		if (am.collided || !th.basesm.inside(am.pos))
 			continue;
 
 		am.killed = 0;
@@ -1236,10 +1277,10 @@ void Tactical::compute_deaths(PlayerMove & mymove, PlayerMove & enemymove, int &
 
 		for (uint enemyantidx = 0; enemyantidx < enemymove.antmoves.size(); ++enemyantidx) {
 			const PlayerMove::AntMove & em = enemymove.antmoves[enemyantidx];
-			if (em.collided || !d.basesm.inside(em.pos))
+			if (em.collided || !th.basesm.inside(em.pos))
 				continue;
 
-			if (d.basesm.eucliddist2(em.pos, am.pos) > AttackRadius2)
+			if (th.basesm.eucliddist2(em.pos, am.pos) > AttackRadius2)
 				continue;
 			if ((mymove.map[em.pos] & PlayerMove::AttackMask) > nrenemies)
 				continue;
@@ -1252,7 +1293,7 @@ void Tactical::compute_deaths(PlayerMove & mymove, PlayerMove & enemymove, int &
 
 	for (uint enemyantidx = 0; enemyantidx < enemymove.antmoves.size(); ++enemyantidx) {
 		PlayerMove::AntMove & am = enemymove.antmoves[enemyantidx];
-		if (am.collided || !d.basesm.inside(am.pos))
+		if (am.collided || !th.basesm.inside(am.pos))
 			continue;
 
 		am.killed = 0;
@@ -1263,10 +1304,10 @@ void Tactical::compute_deaths(PlayerMove & mymove, PlayerMove & enemymove, int &
 
 		for (uint myantidx = 0; myantidx < mymove.antmoves.size(); ++myantidx) {
 			const PlayerMove::AntMove & em = mymove.antmoves[myantidx];
-			if (em.collided || !d.basesm.inside(em.pos))
+			if (em.collided || !th.basesm.inside(em.pos))
 				continue;
 
-			if (d.basesm.eucliddist2(am.pos, em.pos) > AttackRadius2)
+			if (th.basesm.eucliddist2(am.pos, em.pos) > AttackRadius2)
 				continue;
 			if ((enemymove.map[em.pos] & PlayerMove::AttackMask) > nrenemies)
 				continue;
@@ -1278,25 +1319,27 @@ void Tactical::compute_deaths(PlayerMove & mymove, PlayerMove & enemymove, int &
 	}
 }
 
-bool Tactical::evaluate_new_moves()
+void Tactical::evaluate_new_moves(uint theateridx)
 {
-	if (d.myevaluated >= d.mymoves.size() && d.enemyevaluated >= d.enemymoves.size())
-		return false;
+	Theater & th = *d.theaters[theateridx];
 
-	for (uint myidx = 0; myidx < d.mymoves.size(); ++myidx) {
-		PlayerMove & mymove = d.mymoves[myidx];
+	if (th.myevaluated >= th.mymoves.size() && th.enemyevaluated >= th.enemymoves.size())
+		return;
+
+	for (uint myidx = 0; myidx < th.mymoves.size(); ++myidx) {
+		PlayerMove & mymove = *th.mymoves[myidx];
 
 		for
-			(uint enemyidx = (myidx < d.myevaluated) ? d.enemyevaluated : 0;
-			 enemyidx < d.enemymoves.size(); ++enemyidx)
+			(uint enemyidx = (myidx < th.myevaluated) ? th.enemyevaluated : 0;
+			 enemyidx < th.enemymoves.size(); ++enemyidx)
 		{
-			PlayerMove & enemymove = d.enemymoves[enemyidx];
+			PlayerMove & enemymove = *th.enemymoves[enemyidx];
 			int myvalue = mymove.nrcollided * ValueLoss;
 			int enemyvalue = enemymove.nrcollided * ValueLoss;
 
 			int mydeaths = 0;
 			int enemydeaths = 0;
-			compute_deaths(mymove, enemymove, mydeaths, enemydeaths);
+			compute_deaths(th, mymove, enemymove, mydeaths, enemydeaths);
 
 			myvalue += mydeaths * ValueLoss + enemydeaths * ValueKill;
 // 			if ((mydeaths || mymove.nrcollided) && !enemydeaths)
@@ -1306,15 +1349,15 @@ bool Tactical::evaluate_new_moves()
 // 			if ((enemydeaths || enemymove.nrcollided) && !mydeaths)
 // 				enemyvalue += ValueUselessDeath;
 
-			int myposvalue = evaluate_ant_positions(mymove, true);
-			int enemyposvalue = evaluate_ant_positions(enemymove, false);
+			int myposvalue = evaluate_ant_positions(th, mymove, true);
+			int enemyposvalue = evaluate_ant_positions(th, enemymove, false);
 
 			myvalue += myposvalue - enemyposvalue;
 			enemyvalue += enemyposvalue - myposvalue;
 
 			state.bug << " " << myidx << " vs. " << enemyidx
 				<< "  value " << myvalue << " vs " << enemyvalue << endl;
-			state.bug << Outcome(*this, myidx, enemyidx);
+			state.bug << Outcome(th, myidx, enemyidx);
 
 			if (myvalue < mymove.worstvalue) {
 				mymove.worstvalue = myvalue;
@@ -1327,124 +1370,195 @@ bool Tactical::evaluate_new_moves()
 		}
 	}
 
-	d.myevaluated = d.mymoves.size();
-	d.enemyevaluated = d.enemymoves.size();
-	return true;
+	th.myevaluated = th.mymoves.size();
+	th.enemyevaluated = th.enemymoves.size();
 }
 
-void Tactical::make_moves(const Location & center)
+void Tactical::generate_theater(const Location & center)
 {
-	d.myants.clear();
-	d.enemyants.clear();
-	d.mymoves.clear();
-	d.enemymoves.clear();
+	uint theateridx = d.theaters.size();
+	Theater & th = *d.alloctheater();
+	d.theaters.push_back(&th);
 
-	d.ismyperspective = true;
-	gensubmap(d.basesm, center);
-	compute_foodpotential(d.basesm, d.foodpotential);
-	d.offset = Location
+	state.bug << "Tactical theater " << theateridx << " around " << center << endl;
+
+	gensubmap(th.basesm, center);
+	compute_foodpotential(th.basesm, th.foodpotential);
+	th.offset = Location
 		((center.row - Submap::Radius + state.rows) % state.rows,
 		 (center.col - Submap::Radius + state.cols) % state.cols);
 
-	d.myevaluated = 0;
-	d.enemyevaluated = 0;
+	// generate init moves
+	th.mymoves.push_back(d.allocmove());
+	th.enemymoves.push_back(d.allocmove());
+	d.nrmoves += 2;
 
-	state.bug << "Tactical around " << center << endl;
+	th.mymoves[0]->map.fill(0);
+	th.enemymoves[0]->map.fill(0);
 
-	generate_initmoves();
+	// collect all ants and sort by distance to center
+	Location local;
+	for (local.row = 0; local.row < Submap::Size; ++local.row) {
+		for (local.col = 0; local.col < Submap::Size; ++local.col) {
+			unsigned char field = th.basesm[local];
 
-	// iterative improvement of moves
-	for (;;) {
-		if (!evaluate_new_moves())
-			break;
+			if (!(field & Submap::Ant))
+				continue;
 
-		if (d.mymoves.size() + d.enemymoves.size() >= MaxEval)
-			break;
+			if (field & Submap::Enemy) {
+				th.enemyants.push_back(local);
+			} else {
+				th.myants.push_back(local);
 
-		uint mybestidx = d.mybestmove();
-		uint mybestenemyidx = d.mymoves[mybestidx].worstopposingidx;
-
-		uint enemybestidx = d.enemybestmove();
-		uint enemybestmyidx = d.enemymoves[enemybestidx].worstopposingidx;
-
-		improve(mybestidx, mybestenemyidx);
-		d.flipsides();
-		improve(mybestenemyidx, mybestidx);
-		if (enemybestidx != mybestenemyidx || enemybestmyidx != mybestidx)
-			improve(enemybestidx, enemybestmyidx);
-		d.flipsides();
-	}
-
-	// execute best move that was found
-	uint bestmoveidx = d.mybestmove();
-	const PlayerMove & move = d.mymoves[bestmoveidx];
-
-	state.bug << "Best move " << bestmoveidx << endl;
-
-	for (uint idx = 0; idx < move.antmoves.size(); ++idx) {
-		int dir = move.antmoves[idx].direction;
-		Location antpos = d.myants[idx];
-		Location global
-			((antpos.row + d.offset.row) % state.rows,
-			 (antpos.col + d.offset.col) % state.cols);
-		uint antidx = bot.myantidx_at(global);
-		Ant & ant = bot.m_ants[antidx];
-
-		assert(move.antmoves[idx].override || ant.direction == dir);
-
-		ant.direction = dir;
-
-		if (move.antmoves[idx].override) {
-			ant.hastactical = true;
-			state.bug << "  Ant at " << ant.where
-				<< " tactical move to " << state.getLocation(ant.where, dir) << " (" << cdir(ant.direction) << ")" << endl;
+				if (th.basesm.infinitydist(local, Location(Submap::Radius, Submap::Radius)) <= TheaterCoreInfinity) {
+					uint antidx = bot.myantidx_at(state.addLocations(th.offset, local));
+					d.myshadowants[antidx].hastactical = true;
+				}
+			}
 		}
 	}
+
+	sort(th.myants.begin(), th.myants.end(), CloserToCenterCompare());
+	sort(th.enemyants.begin(), th.enemyants.end(), CloserToCenterCompare());
+
+	// Fill in default moves
+	th.mymoves[0]->antmoves.reserve(th.myants.size());
+	for (uint idx = 0; idx < th.myants.size(); ++idx) {
+		const Location & local = th.myants[idx];
+		Location global
+			((local.row + th.offset.row) % state.rows,
+			 (local.col + th.offset.col) % state.cols);
+		Ant & ant = bot.m_ants[bot.myantidx_at(global)];
+		Location nextlocal;
+		th.basesm.getneighbouropt(local, ant.direction, nextlocal);
+		th.mymoves[0]->antmoves.push_back(PlayerMove::AntMove(nextlocal, ant.direction));
+		th.mymoves[0]->ant_mark(idx);
+	}
+
+	th.enemymoves[0]->antmoves.reserve(th.enemyants.size());
+	for (uint idx = 0; idx < th.enemyants.size(); ++idx) {
+		const Location & local = th.enemyants[idx];
+		th.enemymoves[0]->antmoves.push_back(PlayerMove::AntMove(local, -1));
+		th.enemymoves[0]->ant_mark(idx);
+	}
+
+	// Finalize the moves
+	th.mymoves[0]->computehash();
+	th.enemymoves[0]->computehash();
+
+	state.bug << Outcome(th, 0, 0);
+}
+
+void Tactical::run_theater(uint theateridx)
+{
+	state.bug << "Run tactical theater " << theateridx << " (turn " << state.turn << ")" << endl;
+
+	Theater & th = *d.theaters[theateridx];
+	th.needupdate = false;
+
+	evaluate_new_moves(theateridx);
+
+	uint mybestidx = th.mybestmove();
+	uint mybestenemyidx = th.mymoves[mybestidx]->worstopposingidx;
+
+	uint enemybestidx = th.enemybestmove();
+	uint enemybestmyidx = th.enemymoves[enemybestidx]->worstopposingidx;
+
+	improve(theateridx, mybestidx, mybestenemyidx);
+	th.flipsides();
+	improve(theateridx, mybestenemyidx, mybestidx);
+	if (enemybestidx != mybestenemyidx || enemybestmyidx != mybestidx)
+		improve(theateridx, enemybestidx, enemybestmyidx);
+	th.flipsides();
+
+	evaluate_new_moves(theateridx);
+
+	state.bug << "-----------------------" << endl;
+}
+
+void Tactical::make_moves()
+{
+	for (uint theateridx = 0; theateridx < d.theaters.size(); ++theateridx) {
+		Theater & th = *d.theaters[theateridx];
+		uint bestmoveidx = th.mybestmove();
+		const PlayerMove & move = *th.mymoves[bestmoveidx];
+
+		state.bug << "Best move in theater " << theateridx << ": " << bestmoveidx << endl;
+
+		for (uint idx = 0; idx < move.antmoves.size(); ++idx) {
+			int dir = move.antmoves[idx].direction;
+			Location antpos = th.myants[idx];
+			Location global
+				((antpos.row + th.offset.row) % state.rows,
+				(antpos.col + th.offset.col) % state.cols);
+			uint antidx = bot.myantidx_at(global);
+			Ant & ant = bot.m_ants[antidx];
+
+			ant.direction = dir;
+
+//			state.bug << "  Ant at " << ant.where
+//				<< " tactical move to " << state.getLocation(ant.where, dir) << " (" << cdir(ant.direction) << ")" << endl;
+		}
+	}
+}
+
+bool Tactical::timeover()
+{
+	if (d.nrmoves > MaxEval) {
+		state.bug << "Max number of moves exceeded" << endl;
+		return true;
+	}
+
+	return false;
 }
 
 void Tactical::run()
 {
-	vector<uint> tactical_close;
-	vector<uint> tactical_mid;
-	vector<uint> tactical_far;
+	d.reset();
 
+	d.myshadowants.resize(bot.m_ants.size());
 	for (uint antidx = 0; antidx < bot.m_ants.size(); ++antidx) {
+		ShadowAnt & sa = d.myshadowants[antidx];
+		sa.pos = bot.m_ants[antidx].where;
+		sa.hastactical = false;
+	}
+
+	// generate theaters
+	uint p = getprime();
+	uint ofs = bot.m_ants.size();
+	for (uint preidx = 0; preidx < bot.m_ants.size(); ++preidx) {
+		uint antidx = (p * preidx + ofs) % bot.m_ants.size();
 		Ant & ant = bot.m_ants[antidx];
-		uint enemydist = bot.m_zoc.m_enemy[ant.where];
-		if (enemydist <= TacticalFar) {
-			if (enemydist <= TacticalClose)
-				tactical_close.push_back(antidx);
-			else if (enemydist <= TacticalMid)
-				tactical_mid.push_back(antidx);
-			else
-				tactical_far.push_back(antidx);
-		}
+		if (d.myshadowants[antidx].hastactical || bot.m_zoc.m_enemy[ant.where] > AttackableManhattanDistance)
+			continue;
+
+		generate_theater(ant.where);
 	}
 
-	while (!tactical_close.empty()) {
-		Ant & ant = bot.m_ants[tactical_close.back()];
-		tactical_close.pop_back();
-		if (!ant.hastactical) {
-			make_moves(ant.where);
-			ant.hastactical = true;
-		}
+	if (d.theaters.empty())
+		return;
+
+	state.bug << "Tactical turn " << state.turn << " on " << d.theaters.size() << " theaters" << endl;
+
+	//
+	uint theateridx = d.theaters.size() - 1;
+	while (!timeover()) {
+		theateridx = (theateridx + 1) % d.theaters.size();
+		uint starttheater = theateridx;
+		do {
+			if (d.theaters[theateridx]->needupdate)
+				break;
+			theateridx = (theateridx + 1) % d.theaters.size();
+		} while (theateridx != starttheater);
+
+		if (!d.theaters[theateridx]->needupdate)
+			break;
+
+		run_theater(theateridx);
 	}
 
-	while (!tactical_mid.empty()) {
-		Ant & ant = bot.m_ants[tactical_mid.back()];
-		tactical_mid.pop_back();
-		if (!ant.hastactical) {
-			make_moves(ant.where);
-			ant.hastactical = true;
-		}
-	}
+	state.bug << "Total number of generated moves: " << d.nrmoves << endl;
 
-	while (!tactical_far.empty()) {
-		Ant & ant = bot.m_ants[tactical_far.back()];
-		tactical_far.pop_back();
-		if (!ant.hastactical) {
-			make_moves(ant.where);
-			ant.hastactical = true;
-		}
-	}
+	//
+	make_moves();
 }

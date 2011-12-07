@@ -17,8 +17,6 @@ struct Ant {
 	int direction;
 	const int * dirperm;
 
-	bool hastactical;
-
 	Ant() : dirperm(0) {reset();}
 
 	void reset();

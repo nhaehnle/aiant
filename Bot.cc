@@ -18,7 +18,6 @@ static const uint KeepDirpermTurns = 64;
 
 void Ant::reset()
 {
-	hastactical = false;
 	direction = -1;
 	if (!dirperm || (fastrng() % KeepDirpermTurns) == 0)
 		dirperm = getdirperm();
