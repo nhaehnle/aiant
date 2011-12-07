@@ -2,7 +2,6 @@
 #define BOT_H_
 
 #include "State.h"
-#include "map.h"
 
 struct FoodSeeker;
 struct HillDefense;
@@ -14,12 +13,14 @@ struct Zoc;
 
 struct Ant {
 	Location where;
+	int direction;
+	const int * dirperm;
 
 	bool hastactical;
 
-	int direction;
+	Ant() : dirperm(0) {reset();}
 
-	Ant() : hastactical(false), direction(-1) {}
+	void reset();
 };
 
 /*
@@ -37,11 +38,15 @@ struct Bot
 	void makeMoves();   //makes moves for a single turn
 	void endTurn();     //indicates to the engine that it has made its moves
 
+	void update_ants();
 	uint myantidx_at(const Location & pos);
 
-	bool try_rotate_move(uint antidx, const Map<bool> & claims);
+	bool try_rotate_move(uint antidx);
 	void make_moves();
 
+	struct Data;
+
+	Data & d;
 	Zoc & m_zoc;
 	SymmetryFinder & m_symmetry;
 	FoodSeeker & m_foodseeker;

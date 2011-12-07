@@ -16,10 +16,25 @@ using namespace std;
 static const unsigned int TacticalClose = 2;
 static const unsigned int TacticalMid = 3;
 static const unsigned int TacticalFar = 5;
+static const uint KeepDirpermTurns = 64;
 
+
+void Ant::reset()
+{
+	hastactical = false;
+	direction = -1;
+	if (!dirperm || (fastrng() % KeepDirpermTurns) == 0)
+		dirperm = getdirperm();
+}
+
+
+struct Bot::Data {
+	Map<bool> claimed;
+};
 
 //constructor
 Bot::Bot() :
+	d(*new Data),
 	m_zoc(*new Zoc(state)),
 	m_symmetry(*new SymmetryFinder(*this)),
 	m_foodseeker(*new FoodSeeker(*this)),
@@ -40,6 +55,7 @@ Bot::~Bot()
 	delete &m_foodseeker;
 	delete &m_symmetry;
 	delete &m_zoc;
+	delete &d;
 }
 
 //plays a single game of Ants.
@@ -50,6 +66,9 @@ void Bot::playGame()
 	state.setup();
 	endTurn();
 
+	d.claimed.resize(state.rows, state.cols);
+
+	//
 	m_zoc.init();
 	m_symmetry.init();
 	m_foodseeker.init();
@@ -79,7 +98,7 @@ uint Bot::myantidx_at(const Location & pos)
 	abort();
 }
 
-bool Bot::try_rotate_move(uint antidx, const Map<bool> & claims)
+bool Bot::try_rotate_move(uint antidx)
 {
 	Ant & ant = m_ants[antidx];
 	int altdir = (ant.direction + 1 + (fastrng() & 2)) % TDIRECTIONS;
@@ -87,7 +106,7 @@ bool Bot::try_rotate_move(uint antidx, const Map<bool> & claims)
 
 	state.bug << "  try altdir " << cdir(altdir) << " to " << moveto << endl;
 
-	if (!claims[moveto] && !state.grid[moveto.row][moveto.col].isWater) {
+	if (!d.claimed[moveto] && !state.grid[moveto.row][moveto.col].isWater) {
 		Location next = state.getLocation(moveto, ant.direction);
 		if (!state.grid[next.row][next.col].isWater) {
 			ant.direction = altdir;
@@ -103,10 +122,10 @@ bool Bot::try_rotate_move(uint antidx, const Map<bool> & claims)
 
 void Bot::make_moves()
 {
-	Map<bool> claimed(state.rows, state.cols);
+	d.claimed.fill(false);
 
 	for (uint foodidx = 0; foodidx < state.food.size(); ++foodidx)
-		claimed[state.food[foodidx]] = true;
+		d.claimed[state.food[foodidx]] = true;
 
 	for (uint antidx = 0; antidx < m_ants.size(); ++antidx) {
 		Ant & ant = m_ants[antidx];
@@ -118,8 +137,8 @@ void Bot::make_moves()
 
 		state.bug << "ant at " << ant.where << " initial attempt " << moveto << " dir " << cdir(ant.direction) << endl;
 
-		if (claimed[moveto] && (ant.direction < 0 || !try_rotate_move(antidx, claimed))) {
-			if (!claimed[ant.where]) {
+		if (d.claimed[moveto] && (ant.direction < 0 || !try_rotate_move(antidx))) {
+			if (!d.claimed[ant.where]) {
 				state.bug << "  current pos unclaimed" << endl;
 				ant.direction = -1;
 			} else {
@@ -128,7 +147,7 @@ void Bot::make_moves()
 				for (int predir = 0; predir < TDIRECTIONS; ++predir) {
 					int dir = dirperm[predir];
 					moveto = state.getLocation(ant.where, dir);
-					if (!claimed[moveto]) {
+					if (!d.claimed[moveto]) {
 						ant.direction = dir;
 						break;
 					}
@@ -140,14 +159,47 @@ void Bot::make_moves()
 
 		if (ant.direction >= 0) {
 			moveto = state.getLocation(ant.where, ant.direction);
-			claimed[moveto] = true;
+			d.claimed[moveto] = true;
 			state.makeMove(ant.where, ant.direction);
 		} else {
-			claimed[ant.where] = true;
+			d.claimed[ant.where] = true;
 		}
 	}
 }
 
+void Bot::update_ants()
+{
+	d.claimed.fill(false);
+
+	for (uint antidx = 0; antidx < m_ants.size(); ++antidx) {
+		Ant & ant = m_ants[antidx];
+		if (ant.direction >= 0)
+			ant.where = state.getLocation(ant.where, ant.direction);
+
+		if (state.grid[ant.where.row][ant.where.col].ant != 0 || d.claimed[ant.where]) {
+			state.bug << "ant at " << ant.where << " move dir " << cdir(ant.direction) << " disappeared" << endl;
+			m_ants[antidx] = m_ants.back();
+			m_ants.pop_back();
+			antidx--;
+		} else {
+			state.bug << "ant at " << ant.where << " remembered" << endl;
+			d.claimed[ant.where] = true;
+
+			ant.reset();
+		}
+	}
+
+	for (uint antidx = 0; antidx < state.myAnts.size(); ++antidx) {
+		const Location & pos = state.myAnts[antidx];
+		if (!d.claimed[pos]) {
+			state.bug << "new ant at " << pos << endl;
+			d.claimed[pos] = true;
+			m_ants.push_back(Ant());
+			Ant & ant = m_ants.back();
+			ant.where = pos;
+		}
+	}
+}
 
 //makes the bots moves for the turn
 void Bot::makeMoves()
@@ -159,13 +211,7 @@ void Bot::makeMoves()
 	//m_symmetry.run();
 
 	//
-	m_ants.clear();
-	m_ants.reserve(state.myAnts.size());
-	for (uint antidx = 0; antidx < state.myAnts.size(); ++antidx) {
-		m_ants.push_back(Ant());
-		Ant & ant = m_ants.back();
-		ant.where = state.myAnts[antidx];
-	}
+	update_ants();
 
 	//
 	m_foodseeker.run();
@@ -183,7 +229,7 @@ void Bot::makeMoves()
 	//m_offense.run();
 
 	//
-	for (uint antidx = 0; antidx < state.myAnts.size(); ++antidx) {
+	for (uint antidx = 0; antidx < m_ants.size(); ++antidx) {
 		Ant & ant = m_ants[antidx];
 
 		state.bug << "ant " << antidx << " at " << ant.where << " dir " << cdir(ant.direction) << endl;
@@ -197,7 +243,7 @@ void Bot::makeMoves()
 		if (ant.direction < 0) {
 			// not looking for food, go towards enemy territory
 			uint my = m_zoc.m_enemy[ant.where];
-			const int * dirperm = getdirperm();
+			const int * dirperm = ant.dirperm;
 			for (int predir = 0; predir < TDIRECTIONS; predir++) {
 				int dir = dirperm[predir];
 				Location loc = state.getLocation(ant.where, dir);
@@ -218,7 +264,7 @@ void Bot::makeMoves()
 	vector<uint> tactical_mid;
 	vector<uint> tactical_far;
 
-	for (uint antidx = 0; antidx < state.myAnts.size(); ++antidx) {
+	for (uint antidx = 0; antidx < m_ants.size(); ++antidx) {
 		Ant & ant = m_ants[antidx];
 		uint enemydist = m_zoc.m_enemy[ant.where];
 		if (enemydist <= TacticalFar) {
