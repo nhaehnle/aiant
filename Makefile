@@ -7,7 +7,7 @@ OBJECTS=$(addsuffix .o, $(basename ${SOURCES}))
 EXECUTABLE=MyBot
 
 #Uncomment the following to enable debugging
-#CFLAGS+=-g -DDEBUG
+CFLAGS+=-g #-DDEBUG
 
 all: $(OBJECTS) $(EXECUTABLE)
 

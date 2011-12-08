@@ -203,7 +203,7 @@ void Bot::update_ants()
 //makes the bots moves for the turn
 void Bot::makeMoves()
 {
-	state.bug << "turn " << state.turn << ":" << endl;
+	state.bug.time << "turn " << state.turn << ":" << endl;
 	state.bug << state << endl;
 
 	m_zoc.update();
@@ -211,6 +211,8 @@ void Bot::makeMoves()
 
 	//
 	update_ants();
+
+	state.bug.time << "time after maintenance: " << state.timer.getTime() << "ms" << endl;
 
 	//
 	m_foodseeker.run();
@@ -257,6 +259,8 @@ void Bot::makeMoves()
 			}
 		}
 	}
+
+	state.bug.time << "time before tactical: " << state.timer.getTime() << "ms" << endl;
 
 	//
 	m_tactical.run();
