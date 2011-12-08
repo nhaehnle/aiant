@@ -1522,5 +1522,5 @@ void Tactical::run()
 		run_theater(theateridx);
 	}
 
-	state.bug << "Total number of generated moves: " << d.nrmoves << endl;
+	state.bug.time << "Total number of generated moves: " << d.nrmoves << endl;
 }
