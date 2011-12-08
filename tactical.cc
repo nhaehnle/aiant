@@ -339,6 +339,7 @@ struct Tactical::Data {
 	vector<ShadowAnt> myshadowants;
 	vector<Theater *> theaters;
 	uint nrmoves;
+	uint nrevals;
 
 	vector<PlayerMove *> unusedmoves;
 	vector<Theater *> unusedtheaters;
@@ -361,6 +362,7 @@ struct Tactical::Data {
 
 	void reset() {
 		nrmoves = 0;
+		nrevals = 0;
 		myshadowants.clear();
 
 		while (!theaters.empty()) {
@@ -1194,6 +1196,8 @@ static float hillvalue(const Submap & sm, const Location & pos, bool mine)
 
 void Tactical::evaluate_moves(Theater & th, PlayerMove & mymove, PlayerMove & enemymove, float & myvalue, float & enemyvalue)
 {
+	d.nrevals++;
+
 	if (mymove.nrcollided)
 		myvalue *= pow(ValueLoss, mymove.nrcollided);
 	if (enemymove.nrcollided)
@@ -1553,5 +1557,5 @@ void Tactical::run()
 		run_theater(theateridx);
 	}
 
-	state.bug.time << "Total number of generated moves: " << d.nrmoves << endl;
+	state.bug.time << "Total number of generated moves: " << d.nrmoves << ", evaluated pairs: " << d.nrevals << endl;
 }
