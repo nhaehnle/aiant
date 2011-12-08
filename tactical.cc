@@ -24,6 +24,7 @@ static const uint MaxAttackRadius2 = 34; ///< radius up to which we consider att
 
 static const float ValueKill = 3.0;
 static const float ValueLoss = 0.25;
+static const float ValueHill = 1.35;
 //@}
 
 static const float EpsilonValue = 0.0000001;
@@ -1168,8 +1169,36 @@ void Tactical::improve(uint theateridx, uint myidx, uint enemyidx)
 	imp.do_improve();
 }
 
-void Tactical::compute_deaths(Theater & th, PlayerMove & mymove, PlayerMove & enemymove, int & mydeaths, int & enemydeaths)
+static float hillvalue(const Submap & sm, const Location & pos, bool mine)
 {
+	if (sm[pos] & Submap::Hill) {
+		if (mine != bool(sm[pos] & Submap::Mine))
+			return ValueHill * ValueHill;
+		return 1.0;
+	}
+
+	for (int dir = 0; dir < TDIRECTIONS; ++dir) {
+		Location n;
+		if (!sm.getneighbour(pos, dir, n))
+			continue;
+
+		if (sm[n] & Submap::Hill) {
+			if (mine != bool(sm[pos] & Submap::Mine))
+				return ValueHill;
+			return 1.0;
+		}
+	}
+
+	return 1.0;
+}
+
+void Tactical::evaluate_moves(Theater & th, PlayerMove & mymove, PlayerMove & enemymove, float & myvalue, float & enemyvalue)
+{
+	if (mymove.nrcollided)
+		myvalue *= pow(ValueLoss, mymove.nrcollided);
+	if (enemymove.nrcollided)
+		enemyvalue *= pow(ValueLoss, enemymove.nrcollided);
+
 	for (uint myantidx = 0; myantidx < mymove.antmoves.size(); ++myantidx) {
 		PlayerMove::AntMove & am = mymove.antmoves[myantidx];
 		if (am.collided || !th.basesm.inside(am.pos))
@@ -1178,22 +1207,29 @@ void Tactical::compute_deaths(Theater & th, PlayerMove & mymove, PlayerMove & en
 		am.killed = 0;
 
 		uint nrenemies = enemymove.map[am.pos] & PlayerMove::AttackMask;
-		if (nrenemies == 0)
-			continue;
+		if (nrenemies != 0) {
+			for (uint enemyantidx = 0; enemyantidx < enemymove.antmoves.size(); ++enemyantidx) {
+				const PlayerMove::AntMove & em = enemymove.antmoves[enemyantidx];
+				if (em.collided || !th.basesm.inside(em.pos))
+					continue;
 
-		for (uint enemyantidx = 0; enemyantidx < enemymove.antmoves.size(); ++enemyantidx) {
-			const PlayerMove::AntMove & em = enemymove.antmoves[enemyantidx];
-			if (em.collided || !th.basesm.inside(em.pos))
-				continue;
+				if (th.basesm.eucliddist2(em.pos, am.pos) > AttackRadius2)
+					continue;
+				if ((mymove.map[em.pos] & PlayerMove::AttackMask) > nrenemies)
+					continue;
 
-			if (th.basesm.eucliddist2(em.pos, am.pos) > AttackRadius2)
-				continue;
-			if ((mymove.map[em.pos] & PlayerMove::AttackMask) > nrenemies)
-				continue;
+				am.killed = 1;
+				break;
+			}
+		}
 
-			am.killed = 1;
-			mydeaths++;
-			break;
+		if (am.killed) {
+			myvalue *= ValueLoss;
+			enemyvalue *= ValueKill;
+		} else {
+			float hv = hillvalue(th.basesm, am.pos, true);
+			myvalue *= hv;
+			enemyvalue *= 1.0 / hv;
 		}
 	}
 
@@ -1205,22 +1241,29 @@ void Tactical::compute_deaths(Theater & th, PlayerMove & mymove, PlayerMove & en
 		am.killed = 0;
 
 		uint nrenemies = mymove.map[am.pos] & PlayerMove::AttackMask;
-		if (nrenemies == 0)
-			continue;
+		if (nrenemies != 0) {
+			for (uint myantidx = 0; myantidx < mymove.antmoves.size(); ++myantidx) {
+				const PlayerMove::AntMove & em = mymove.antmoves[myantidx];
+				if (em.collided || !th.basesm.inside(em.pos))
+					continue;
 
-		for (uint myantidx = 0; myantidx < mymove.antmoves.size(); ++myantidx) {
-			const PlayerMove::AntMove & em = mymove.antmoves[myantidx];
-			if (em.collided || !th.basesm.inside(em.pos))
-				continue;
+				if (th.basesm.eucliddist2(am.pos, em.pos) > AttackRadius2)
+					continue;
+				if ((enemymove.map[em.pos] & PlayerMove::AttackMask) > nrenemies)
+					continue;
 
-			if (th.basesm.eucliddist2(am.pos, em.pos) > AttackRadius2)
-				continue;
-			if ((enemymove.map[em.pos] & PlayerMove::AttackMask) > nrenemies)
-				continue;
+				am.killed = 1;
+				break;
+			}
+		}
 
-			am.killed = 1;
-			enemydeaths++;
-			break;
+		if (am.killed) {
+			myvalue *= ValueKill;
+			enemyvalue *= ValueLoss;
+		} else {
+			float hv = hillvalue(th.basesm, am.pos, false);
+			enemyvalue *= hv;
+			myvalue *= 1.0 / hv;
 		}
 	}
 }
@@ -1240,22 +1283,10 @@ void Tactical::evaluate_new_moves(uint theateridx)
 			 enemyidx < th.enemymoves.size(); ++enemyidx)
 		{
 			PlayerMove & enemymove = *th.enemymoves[enemyidx];
-			uint myloss = mymove.nrcollided;
-			uint enemyloss = enemymove.nrcollided;
-			uint mykill = 0;
-			uint enemykill = 0;
+			float myvalue = 1.0;
+			float enemyvalue = 1.0;
 
-			int mydeaths = 0;
-			int enemydeaths = 0;
-			compute_deaths(th, mymove, enemymove, mydeaths, enemydeaths);
-
-			myloss += mydeaths;
-			mykill += enemydeaths;
-			enemyloss += enemydeaths;
-			enemykill += mydeaths;
-
-			float myvalue = pow(ValueKill, mykill) * pow(ValueLoss, myloss);
-			float enemyvalue = pow(ValueKill, enemykill) * pow(ValueLoss, enemyloss);
+			evaluate_moves(th, mymove, enemymove, myvalue, enemyvalue);
 
 			state.bug << " " << myidx << " vs. " << enemyidx
 				<< "  value " << myvalue << " vs " << enemyvalue << endl;

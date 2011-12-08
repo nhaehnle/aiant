@@ -35,7 +35,7 @@ struct Tactical : Module {
 	void gensubmap(Submap & sm, const Location & center);
 	void gensubmap_field(Submap & sm, const Location & local, const Location & global);
 
-	void compute_deaths(Theater & th, PlayerMove & pm, PlayerMove & enemymove, int & mydeaths, int & enemydeaths);
+	void evaluate_moves(Theater & th, PlayerMove & pm, PlayerMove & enemymove, float & myvalue, float & enemyvalue);
 	void evaluate_new_moves(uint theateridx);
 	bool get_improve_pair(const std::vector<PlayerMove *> & moves, uint & myidx, uint & enemyidx);
 	void improve(uint theateridx, uint myidx, uint enemyidx);
