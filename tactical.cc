@@ -25,6 +25,7 @@ static const uint MaxAttackRadius2 = 34; ///< radius up to which we consider att
 static const float ValueKill = 3.0;
 static const float ValueLoss = 0.25;
 static const float ValueHill = 1.35;
+static const float ValueEnemyDist = 0.99;
 //@}
 
 static const float EpsilonValue = 0.0000001;
@@ -846,6 +847,7 @@ struct Improve {
 				if (otheridx == myantidx || otherm.pos != am.pos)
 					continue;
 
+				const Location & otherorig = th.myants[otheridx];
 				int allfreedirection = -2;
 				int collisiondirection = -2;
 				int attackeddirection = -2;
@@ -853,7 +855,7 @@ struct Improve {
 #define check_candidate(dir) \
 	do { \
 		Location n; \
-		if (!th.basesm.getneighbouropt(otherm.pos, (dir), n)) break; \
+		if (!th.basesm.getneighbouropt(otherorig, (dir), n)) break; \
 		if (th.basesm[n] & Submap::Water) break; \
 		bool collision = nm.move().map[n] & PlayerMove::AntsMask; \
 		bool attacked = theenemymove().map[n] & PlayerMove::AttackMask; \
@@ -1196,6 +1198,8 @@ static float hillvalue(const Submap & sm, const Location & pos, bool mine)
 
 void Tactical::evaluate_moves(Theater & th, PlayerMove & mymove, PlayerMove & enemymove, float & myvalue, float & enemyvalue)
 {
+	uint myenemydist = 0;
+
 	d.nrevals++;
 
 	if (mymove.nrcollided)
@@ -1234,8 +1238,11 @@ void Tactical::evaluate_moves(Theater & th, PlayerMove & mymove, PlayerMove & en
 			float hv = hillvalue(th.basesm, am.pos, true);
 			myvalue *= hv;
 			enemyvalue *= 1.0 / hv;
+			myenemydist += bot.m_zoc.m_enemy[state.addLocations(am.pos, th.offset)];
 		}
 	}
+
+	myvalue *= pow(ValueEnemyDist, myenemydist);
 
 	for (uint enemyantidx = 0; enemyantidx < enemymove.antmoves.size(); ++enemyantidx) {
 		PlayerMove::AntMove & am = enemymove.antmoves[enemyantidx];
