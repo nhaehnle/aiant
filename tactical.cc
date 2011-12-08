@@ -16,7 +16,7 @@ using namespace std;
 
 /// Tweakable parameters
 //@{
-static const uint MaxEval = 1000; ///< max number of moves to evaluate
+static const uint MaxEval = 100000; ///< max number of evaluations
 
 static const uint AttackableManhattanDistance = 5; ///< max distance for an ant to trigger theater creation
 static const uint TheaterCoreInfinity = 2; ///< max infinity norm distance for an ant to "belong" to the theater
@@ -627,7 +627,7 @@ struct NewMove {
 
 		pm.ant_mark(myantidx);
 
-		state.bug << "antmove " << myantidx << " to " << cdir(direction) << " aka " << am.pos << endl;
+		state.bug << "    antmove " << myantidx << " to " << cdir(direction) << " aka " << am.pos << endl;
 	}
 
 	void commit()
@@ -826,7 +826,7 @@ struct Improve {
 
 	bool pushmove(NewMove & nm, uint myantidx, int direction)
 	{
-		state.bug << "pushmove " << myantidx << " at " << nm.move().antmoves[myantidx].pos << " to " << cdir(direction) << endl;
+		state.bug << "  pushmove " << myantidx << " at " << nm.move().antmoves[myantidx].pos << " to " << cdir(direction) << endl;
 
 		// This has a bias towards retreating away from the enemy
 		for (int iters = 0; iters < 5; ++iters) {
@@ -834,7 +834,7 @@ struct Improve {
 			nm.antmove(myantidx, direction);
 
 			if (!am.collided) {
-				state.bug << "pushmove success in iter " << iters << endl;
+				state.bug << "  pushmove success in iter " << iters << endl;
 				return true;
 			}
 
@@ -896,7 +896,7 @@ struct Improve {
 			}
 		}
 
-		state.bug << "pushmove failed" << endl;
+		state.bug << "  pushmove failed" << endl;
 		return false;
 	}
 
@@ -1038,10 +1038,10 @@ struct Improve {
 			const Location & orig = th.myants[myantidx];
 			const Location & current = mymove.antmoves[myantidx].pos;
 
-			state.bug << "  consider ant " << myantidx << " at " << current << " (from " << orig << ")" << endl;
+//			state.bug << "  consider ant " << myantidx << " at " << current << " (from " << orig << ")" << endl;
 
 			if (th.basesm.eucliddist2(current, enemypos) <= AttackRadius2) {
-				state.bug << "    already attacking" << endl;
+//				state.bug << "    already attacking" << endl;
 				// already attacking the target
 				bestattacker = min(bestattacker, uint(enemymove.map[current] & PlayerMove::AttackMask));
 				continue;
@@ -1050,7 +1050,7 @@ struct Improve {
 			if (th.basesm.eucliddist2(orig, enemypos) > AttackNeighboursRadius2)
 				continue; // too far away
 
-			state.bug << "  close enough" << endl;
+//			state.bug << "  close enough" << endl;
 
 			int bestdirection = -1;
 			uint bestvalue = numeric_limits<uint>::max();
@@ -1065,7 +1065,7 @@ struct Improve {
 				if (th.basesm[n] & Submap::Water)
 					continue;
 
-				state.bug << "  consider moving to " << n << " " << cdir(dir) << endl;
+//				state.bug << "  consider moving to " << n << " " << cdir(dir) << endl;
 
 				uint value = enemymove.map[n] & PlayerMove::AttackMask;
 				if (value < bestvalue) {
@@ -1074,7 +1074,7 @@ struct Improve {
 				}
 			}
 
-			state.bug << "  best choice: " << cdir(bestdirection) << " attackers " << bestvalue << endl;
+//			state.bug << "  best choice: " << cdir(bestdirection) << " attackers " << bestvalue << endl;
 
 			additionalidx[nradditional] = myantidx;
 			additionaldir[nradditional] = bestdirection;
@@ -1087,7 +1087,7 @@ struct Improve {
 
 		NewMove nm(t, th, myidx, why);
 		for (uint idx = 0; idx < nradditional; ++idx) {
-			state.bug << idx << " nrattackers vs. bestattacker " << nrattackers << " " << bestattacker << endl;
+//			state.bug << idx << " nrattackers vs. bestattacker " << nrattackers << " " << bestattacker << endl;
 			if (nrattackers > bestattacker)
 				break;
 
@@ -1301,7 +1301,8 @@ void Tactical::evaluate_new_moves(uint theateridx)
 
 			state.bug << " " << myidx << " vs. " << enemyidx
 				<< "  value " << myvalue << " vs " << enemyvalue << endl;
-			state.bug << Outcome(th, myidx, enemyidx);
+			if (state.turn == 29)
+				state.bug << Outcome(th, myidx, enemyidx);
 
 			mymove.outcomes.push_back(PlayerMove::VsOutcome(myvalue));
 			enemymove.outcomes.push_back(PlayerMove::VsOutcome(enemyvalue));
@@ -1413,27 +1414,30 @@ bool Tactical::get_improve_pair(const vector<PlayerMove *> & moves, uint & myidx
 	for (uint idx = 0; idx < moves.size(); ++idx)
 		totalvalue += moves[idx]->worstvalue;
 
-	double v = fastrngd() * totalvalue;
+	for (uint tries = 0; tries < 3; ++tries) {
+		double v = fastrngd() * totalvalue;
 
-	myidx = 0;
-	do {
-		v -= moves[myidx++]->worstvalue;
-	} while (v >= 0.0 && myidx < moves.size());
-	myidx--;
+		myidx = 0;
+		do {
+			v -= moves[myidx++]->worstvalue;
+		} while (v >= 0.0 && myidx < moves.size());
+		myidx--;
 
-	PlayerMove & mymove = *moves[myidx];
+		PlayerMove & mymove = *moves[myidx];
 
-	d.tmp_candidates.clear();
-	for (uint idx = 0; idx < mymove.outcomes.size(); ++idx) {
-		if (!mymove.outcomes[idx].improved && mymove.outcomes[idx].value <= mymove.worstvalue + EpsilonValue)
-			d.tmp_candidates.push_back(idx);
+		d.tmp_candidates.clear();
+		for (uint idx = 0; idx < mymove.outcomes.size(); ++idx) {
+			if (!mymove.outcomes[idx].improved && mymove.outcomes[idx].value <= mymove.worstvalue + EpsilonValue)
+				d.tmp_candidates.push_back(idx);
+		}
+
+		if (!d.tmp_candidates.empty()) {
+			enemyidx = d.tmp_candidates[fastrng() % d.tmp_candidates.size()];
+			return true;
+		}
 	}
 
-	if (d.tmp_candidates.empty())
-		return false;
-
-	enemyidx = d.tmp_candidates[fastrng() % d.tmp_candidates.size()];
-	return true;
+	return false;
 }
 
 void Tactical::run_theater(uint theateridx)
@@ -1509,8 +1513,8 @@ void Tactical::push_moves(uint theateridx, uint myidx)
 
 bool Tactical::timeover()
 {
-	if (d.nrmoves > MaxEval) {
-		state.bug << "Max number of moves exceeded" << endl;
+	if (d.nrevals > MaxEval) {
+		state.bug << "Max number of evals exceeded" << endl;
 		return true;
 	}
 

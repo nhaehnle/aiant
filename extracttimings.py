@@ -36,7 +36,7 @@ for line in sys.stdin:
 			if v[key] == None:
 				break
 		else:
-			print '{0:0<3}'.format(turn), ' '.join('{0:>10}'.format(v[key]) for key in v.iterkeys())
+			print '{0:03}'.format(turn), ' '.join('{0:>10}'.format(v[key]) for key in v.iterkeys())
 			for key in v.iterkeys():
 				v[key] = None
 				turn = None
