@@ -24,7 +24,7 @@ static const uint MaxAttackRadius2 = 34; ///< radius up to which we consider att
 
 static const float ValueKill = 3.0;
 static const float ValueLoss = 0.25;
-static const float ValueHill = 1.35;
+static const float ValueHill = 2.0;
 static const float ValueEnemyDist = 0.99;
 //@}
 
