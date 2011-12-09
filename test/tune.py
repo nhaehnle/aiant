@@ -109,10 +109,27 @@ class TuneGroup(object):
 		return bot[bot.rfind('/')+1:]
 
 	def mutate(self, key, sigma, oldv):
-		kind = self.settings["parameters"][key]["kind"]
+		param = self.settings["parameters"][key]
+		kind = param["kind"]
 		if kind == "log":
 			oldlog = math.log(oldv)
-			newlog = random.gauss(oldlog, 0.00001 + abs(oldlog) * sigma)
+			s = abs(oldlog)
+			if "minsigma" in param:
+				s = max(s, param["minsigma"])
+			else:
+				s += 0.00001
+			newlog = random.gauss(oldlog, s * sigma)
+			return math.exp(newlog)
+		elif kind == "linear":
+			s = abs(oldv)
+			if "minsigma" in param:
+				s = max(s, param["minsigma"])
+			else:
+				s += 0.00001
+			return random.gauss(oldv, s * sigma)
+		elif kind == "lognormal":
+			oldlog = math.log(oldv)
+			newlog = random.gauss(oldlog, param["sigma"] * sigma)
 			return math.exp(newlog)
 		else:
 			raise ValueError("bad key kind '{0}' for key '{1}'".format(kind, key))
@@ -174,12 +191,15 @@ def getfirstgameid():
 	return gameid
 
 def main():
-	global GAMEID
+	global MINGAMES
 
 	trueskill.SetParameters(beta=25.0/3.0, draw_probability=0.3)
 
 	with open(sys.argv[1], 'r') as filp:
 		settings = json.load(filp)
+
+	if "mingames" in settings:
+		MINGAMES = settings["mingames"]
 
 	maps = helpers.listmaps(settings["ants"] + "maps")
 	gameid = getfirstgameid()
