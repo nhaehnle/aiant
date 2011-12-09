@@ -26,6 +26,10 @@ static float ValueKill = 3.0;
 static float ValueLoss = 0.25;
 static float ValueHill = 2.0;
 static float ValueEnemyDist = 0.999;
+
+static uint MinAggressionAnts = 4;
+static float AggressionThresholdShift = 0.0;
+static float AggressionScale = 1.0;
 //@}
 
 static const float EpsilonValue = 0.0000001;
@@ -314,6 +318,7 @@ struct PlayerMove {
 struct Tactical::Theater {
 	bool needupdate;
 	bool ismyperspective;
+	bool aggressive;
 	Location offset;
 	Submap basesm;
 	vector<Location> myants;
@@ -398,6 +403,7 @@ void Tactical::Theater::reset(Data & d)
 {
 	needupdate = true;
 	ismyperspective = true;
+	aggressive = false;
 	myants.clear();
 	enemyants.clear();
 
@@ -539,6 +545,9 @@ void Tactical::init()
 	ValueLoss = bot.getargfloat("ValueLoss", ValueLoss);
 	ValueHill = bot.getargfloat("ValueHill", ValueHill);
 	ValueEnemyDist = bot.getargfloat("ValueEnemyDist", ValueEnemyDist);
+
+	AggressionThresholdShift = bot.getargfloat("AggressionThresholdShift", AggressionThresholdShift);
+	AggressionScale = bot.getargfloat("AggressionScale", AggressionScale);
 
 	state.bug.time << "Tactical parameters: ValueKill = " << ValueKill
 		<< ", ValueLoss = " << ValueLoss
@@ -1240,7 +1249,10 @@ void Tactical::evaluate_moves(Theater & th, PlayerMove & mymove, PlayerMove & en
 		}
 
 		if (am.killed) {
-			myvalue *= ValueLoss;
+			if (th.aggressive)
+				myvalue /= ValueKill;
+			else
+				myvalue *= ValueLoss;
 			enemyvalue *= ValueKill;
 		} else {
 			float hv = hillvalue(th.basesm, am.pos, true);
@@ -1363,6 +1375,15 @@ void Tactical::generate_theater(const Location & center)
 
 	sort(th.myants.begin(), th.myants.end(), CloserToCenterCompare());
 	sort(th.enemyants.begin(), th.enemyants.end(), CloserToCenterCompare());
+
+	// determine aggressiveness based on ratio of our vs. enemy ants
+	if (th.myants.size() >= MinAggressionAnts) {
+		double antratio = (double)th.myants.size() / (double)th.enemyants.size();
+		double p = 1.0 / (1.0 + exp(-AggressionScale * (log(antratio) + AggressionThresholdShift)));
+
+		if (fastrngd() <= p)
+			th.aggressive = true;
+	}
 
 	// generate enemy init move
 	th.enemymoves.push_back(d.allocmove());
