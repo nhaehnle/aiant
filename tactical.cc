@@ -1301,8 +1301,8 @@ void Tactical::evaluate_new_moves(uint theateridx)
 
 			state.bug << " " << myidx << " vs. " << enemyidx
 				<< "  value " << myvalue << " vs " << enemyvalue << endl;
-			if (state.turn == 29)
-				state.bug << Outcome(th, myidx, enemyidx);
+//			if (state.turn == 839)
+//				state.bug << Outcome(th, myidx, enemyidx);
 
 			mymove.outcomes.push_back(PlayerMove::VsOutcome(myvalue));
 			enemymove.outcomes.push_back(PlayerMove::VsOutcome(enemyvalue));
