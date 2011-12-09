@@ -130,6 +130,8 @@ class TuneGroup(object):
 			idx = (idx + 1) % initialcount
 
 		self.save_population()
+
+		print "After mutation", keysigmas
 		self.print_population()
 
 	def save_population(self):
@@ -157,10 +159,9 @@ class TuneGroup(object):
 		minskill = min(bot.skill[0] for bot in self.population)
 		self.population = weightedsample(self.population, self.settings["popsize"] / 3, key=lambda bot: bot.skill[0] - minskill)
 
-		print "Culled"
+		print "After population culling:"
 		self.print_population()
 
-		print "Mutating"
 		self.generate_mutations()
 
 		return self.population[-1]
