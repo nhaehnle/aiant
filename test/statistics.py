@@ -4,6 +4,8 @@ import argparse
 import json
 import os
 
+import trueskill
+
 class Bot:
 	def __init__(self, idx, name):
 		self.idx = idx
@@ -11,6 +13,7 @@ class Bot:
 		self.games = []
 		self.status = {}
 		self.results = []
+		self.skill = (trueskill.INITIAL_MU, trueskill.INITIAL_SIGMA)
 
 	def addgame(self, gameidx, botid, status):
 		self.games.append((gameidx, botid, status))
@@ -49,7 +52,6 @@ def process_replay(replayidx, replay):
 		return False
 
 	botidx = [getbotidx(name) for name in replay["playernames"]]
-	bots = [Bots[idx] for idx in botidx]
 
 	for gameidx in range(len(botidx)):
 		bot = Bots[botidx[gameidx]]
@@ -74,6 +76,11 @@ def process_replay(replayidx, replay):
 				assert myrank > otherrank
 				bot.addmatch(otheridx, -1)
 
+	bots = [Bots[botidx[i]] for i in range(len(botidx))]
+	for i in range(len(bots)):
+		bots[i].rank = replay["rank"][i]
+	trueskill.AdjustPlayers(bots)
+
 	NrGames += 1
 	return True
 
@@ -94,6 +101,7 @@ def loadreplays():
 				print "Error in replay", replayidx
 
 def main():
+	trueskill.SetParameters()
 	loadreplays()
 
 	maxnamelen = max([len(bot.name) for bot in Bots])
@@ -150,6 +158,17 @@ def main():
 				else:
 					print "{0:>2}%".format(int(float(results[2]) / float(s) * 100.0)),
 		print
+	print
+
+	print "Rank", ' '*maxnamelen, "TS    ", "mu    ", "sigma "
+	bots = [i for i in range(len(Bots))]
+	bots.sort(key=lambda bot: Bots[bot].skill[0] - 3*Bots[bot].skill[1], reverse=True)
+	for rank in range(len(bots)):
+		bot = Bots[bots[rank]]
+		print "{0:>3}: {name:{maxnamelen}} {trueskill:<6.5} {mu:<6.5} {sigma:<6.5}".format(rank+1,
+			name=bot.name, maxnamelen=maxnamelen,
+			trueskill=bot.skill[0] - 3*bot.skill[1],
+			mu=bot.skill[0], sigma=bot.skill[1])
 
 if __name__ == "__main__":
 	parser = argparse.ArgumentParser(description='Collect statistics form replays.')
