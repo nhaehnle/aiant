@@ -14,7 +14,6 @@
 # }
 # "ants" is the path to the game distribution (contains the playgame.py file)
 
-import argparse
 import json
 import os
 import random
