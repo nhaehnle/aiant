@@ -1,4 +1,5 @@
 #include <cassert>
+#include <map>
 
 #include "Bot.h"
 #include "astar.h"
@@ -25,11 +26,19 @@ void Ant::reset()
 
 
 struct Bot::Data {
+	struct Argument {
+		std::string value;
+		bool used;
+
+		Argument(const std::string & s) : value(s), used(false) {}
+	};
+	std::map<std::string, Argument> args;
+
 	Map<bool> claimed;
 };
 
 //constructor
-Bot::Bot() :
+Bot::Bot(int argc, char * * argv) :
 	d(*new Data),
 	m_zoc(*new Zoc(state)),
 	m_symmetry(*new SymmetryFinder(*this)),
@@ -40,7 +49,23 @@ Bot::Bot() :
 	m_offense(*new Offense(*this)),
 	m_tactical(*new Tactical(*this))
 {
+	for (int i = 1; i < argc; i += 2) {
+		if (argv[i][0] != '-' || argv[i][1] != '-') {
+			cerr << "Argument must start with '--'" << endl;
+			abort();
+		}
 
+		if (i + 1 >= argc) {
+			cerr << "Argument missing" << endl;
+			abort();
+		}
+
+		string key = argv[i] + 2;
+		string value = argv[i+1];
+
+		state.bug.time << "Command line argument: " << key << " = " << value << endl;
+		d.args.insert(make_pair(key, Data::Argument(value)));
+	}
 }
 
 Bot::~Bot()
@@ -54,6 +79,16 @@ Bot::~Bot()
 	delete &m_symmetry;
 	delete &m_zoc;
 	delete &d;
+}
+
+float Bot::getargfloat(const std::string & key, float def)
+{
+	map<string, Data::Argument>::iterator it = d.args.find(key);
+	if (it == d.args.end())
+		return def;
+
+	it->second.used = true;
+	return strtof(it->second.value.c_str(), 0);
 }
 
 //plays a single game of Ants.
@@ -75,6 +110,14 @@ void Bot::playGame()
 	m_opportunisticattack.init();
 	m_offense.init();
 	m_tactical.init();
+
+	//
+	for (map<string, Data::Argument>::const_iterator it = d.args.begin(); it != d.args.end(); ++it) {
+		if (!it->second.used) {
+			cerr << "Argument " << it->first << " not used" << endl;
+			abort();
+		}
+	}
 
 	//continues making moves while the game is not over
 	while(cin >> state)

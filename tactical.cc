@@ -22,10 +22,10 @@ static const uint AttackableManhattanDistance = 5; ///< max distance for an ant 
 static const uint TheaterCoreInfinity = 2; ///< max infinity norm distance for an ant to "belong" to the theater
 static const uint MaxAttackRadius2 = 34; ///< radius up to which we consider attacking an enemy (this is the maximum distance a core ant can possibly attack)
 
-static const float ValueKill = 3.0;
-static const float ValueLoss = 0.25;
-static const float ValueHill = 2.0;
-static const float ValueEnemyDist = 0.99;
+static float ValueKill = 3.0;
+static float ValueLoss = 0.25;
+static float ValueHill = 2.0;
+static float ValueEnemyDist = 0.999;
 //@}
 
 static const float EpsilonValue = 0.0000001;
@@ -535,7 +535,15 @@ Tactical::~Tactical()
 
 void Tactical::init()
 {
+	ValueKill = bot.getargfloat("ValueKill", ValueKill);
+	ValueLoss = bot.getargfloat("ValueLoss", ValueLoss);
+	ValueHill = bot.getargfloat("ValueHill", ValueHill);
+	ValueEnemyDist = bot.getargfloat("ValueEnemyDist", ValueEnemyDist);
 
+	state.bug.time << "Tactical parameters: ValueKill = " << ValueKill
+		<< ", ValueLoss = " << ValueLoss
+		<< ", ValueHill = " << ValueHill
+		<< ", ValueEnemyDist = " << ValueEnemyDist << endl;
 }
 
 void Tactical::gensubmap_field(Submap & sm, const Location & local, const Location & global)

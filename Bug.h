@@ -7,7 +7,7 @@
     //#define DEBUG
 #endif
 
-//#define TIMEONLY
+#define TIMEONLY
 
 struct Bug;
 

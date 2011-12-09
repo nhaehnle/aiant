@@ -29,8 +29,10 @@ struct Bot
 {
 	State state;
 
-	Bot();
+	Bot(int argc, char * * argv);
 	~Bot();
+
+	float getargfloat(const std::string & key, float def);
 
 	void playGame();    //plays a single game of Ants
 
