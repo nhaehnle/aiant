@@ -101,7 +101,7 @@ def loadreplays():
 				print "Error in replay", replayidx
 
 def main():
-	trueskill.SetParameters()
+	trueskill.SetParameters(beta=25.0/3.0)
 	loadreplays()
 
 	maxnamelen = max([len(bot.name) for bot in Bots])
