@@ -101,7 +101,7 @@ def loadreplays():
 				print "Error in replay", replayidx
 
 def main():
-	trueskill.SetParameters(beta=25.0/3.0)
+	trueskill.SetParameters(beta=25.0/3.0, draw_probability=0.3)
 	loadreplays()
 
 	maxnamelen = max([len(bot.name) for bot in Bots])
@@ -144,6 +144,9 @@ def main():
 		print
 	print
 
+	draws = 0
+	total = 0
+
 	print "    ", ' '.join(["{0:>3}".format(i+1) for i in range(len(Bots))])
 	for idx in range(len(Bots)):
 		print "{0:>3}:".format(idx+1),
@@ -153,12 +156,16 @@ def main():
 			else:
 				results = Bots[botmap[idx]].getmatches(botmap[otheridx])
 				s = sum(results)
+				total += s
+				draws += results[1]
 				if s < 5:
 					print "???",
 				else:
 					print "{0:>2}%".format(int(float(results[2]) / float(s) * 100.0)),
 		print
 	print
+
+	print "Draw percentage:", 100.0 * draws / total
 
 	print "Rank", ' '*maxnamelen, "TS    ", "mu    ", "sigma "
 	bots = [i for i in range(len(Bots))]
