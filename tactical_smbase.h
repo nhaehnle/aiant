@@ -165,11 +165,13 @@ struct PlayerMove {
 		float value;
 		int32_t improved;
 
-		VsOutcome(float v) : value(v), improved(0) {}
+		VsOutcome(float v, int32_t imp) : value(v), improved(imp) {}
 	};
 
 	float worstvalue;
 	std::vector<VsOutcome> outcomes;
+	float weight;
+	float counterweight;
 
 	PlayerMove() {
 		reset();
@@ -181,12 +183,16 @@ struct PlayerMove {
 		antmoves.clear();
 		worstvalue = std::numeric_limits<float>::max();
 		outcomes.clear();
+		weight = 1.0;
+		counterweight = 1.0;
 	}
 
 	void init(const PlayerMove & o) {
 		antmoves = o.antmoves;
 		nrcollided = o.nrcollided;
 		map = o.map;
+		weight = o.weight;
+		counterweight = o.counterweight;
 	}
 
 	void computehash() {

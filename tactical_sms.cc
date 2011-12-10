@@ -21,6 +21,8 @@ static const uint MaxEval = 100000; ///< max number of evaluations
 static const uint AttackableManhattanDistance = 5; ///< max distance for an ant to trigger theater creation
 static const uint TheaterCoreInfinity = 2; ///< max infinity norm distance for an ant to "belong" to the theater
 static const uint MaxAttackRadius2 = 34; ///< radius up to which we consider attacking an enemy (this is the maximum distance a core ant can possibly attack)
+
+static float LearnGamma = 1.5;
 //@}
 
 static const float EpsilonValue = 0.0000001;
@@ -41,8 +43,8 @@ struct TacticalSms::Theater {
 
 	vector<PlayerMove *> mymoves;
 	vector<PlayerMove *> enemymoves;
-	uint myevaluated;
-	uint enemyevaluated;
+	uint mymove;
+	uint mymove_unchangedrounds;
 
 	Theater(Data & d) {reset(d);}
 
@@ -66,6 +68,7 @@ struct TacticalSms::Data {
 	vector<Theater *> unusedtheaters;
 
 	vector<uint> tmp_candidates;
+	vector<bool> tmp_mask;
 
 	Data() {reset();}
 	~Data() {
@@ -130,8 +133,8 @@ void TacticalSms::Theater::reset(Data & d)
 		d.unusedmoves.push_back(enemymoves.back());
 		enemymoves.pop_back();
 	}
-	myevaluated = 0;
-	enemyevaluated = 0;
+	mymove = 0;
+	mymove_unchangedrounds = 0;
 }
 
 void TacticalSms::Theater::flipsides()
@@ -140,7 +143,6 @@ void TacticalSms::Theater::flipsides()
 	basesm.flipsides();
 	swap(myants, enemyants);
 	swap(mymoves, enemymoves);
-	swap(myevaluated, enemyevaluated);
 }
 
 bool TacticalSms::Theater::is_duplicate_mymove(uint myidx)
@@ -909,20 +911,23 @@ void TacticalSms::evaluate_moves(Theater & th, PlayerMove & mymove, PlayerMove &
 		}
 
 		if (am.killed) {
-			if (th.aggressive)
+			if (th.ismyperspective && th.aggressive)
 				myvalue /= ValueKill;
 			else
 				myvalue *= ValueLoss;
 			enemyvalue *= ValueKill;
 		} else {
-			float hv = hillvalue(th.basesm, am.pos, true, ValueHill);
+			float hv = hillvalue(th.basesm, am.pos, th.ismyperspective, ValueHill);
 			myvalue *= hv;
 			enemyvalue *= 1.0 / hv;
-			myenemydist += bot.m_zoc.m_enemy[state.addLocations(am.pos, th.offset)];
+
+			if (th.ismyperspective)
+				myenemydist += bot.m_zoc.m_enemy[state.addLocations(am.pos, th.offset)];
 		}
 	}
 
-	myvalue *= pow(ValueEnemyDist, myenemydist);
+	if (th.ismyperspective)
+		myvalue *= pow(ValueEnemyDist, myenemydist);
 
 	for (uint enemyantidx = 0; enemyantidx < enemymove.antmoves.size(); ++enemyantidx) {
 		PlayerMove::AntMove & am = enemymove.antmoves[enemyantidx];
@@ -950,52 +955,142 @@ void TacticalSms::evaluate_moves(Theater & th, PlayerMove & mymove, PlayerMove &
 
 		if (am.killed) {
 			myvalue *= ValueKill;
-			enemyvalue *= ValueLoss;
+			if (!th.ismyperspective && th.aggressive)
+				enemyvalue /= ValueKill;
+			else
+				enemyvalue *= ValueLoss;
 		} else {
-			float hv = hillvalue(th.basesm, am.pos, false, ValueHill);
+			float hv = hillvalue(th.basesm, am.pos, !th.ismyperspective, ValueHill);
 			enemyvalue *= hv;
 			myvalue *= 1.0 / hv;
+
+			if (!th.ismyperspective)
+				myenemydist += bot.m_zoc.m_enemy[state.addLocations(am.pos, th.offset)];
 		}
 	}
+
+	if (!th.ismyperspective)
+		enemyvalue *= pow(ValueEnemyDist, myenemydist);
 }
 
-void TacticalSms::evaluate_new_moves(uint theateridx)
+void TacticalSms::evaluate_pair(uint theateridx, uint myidx, uint enemyidx)
+{
+	Theater & th = *d.theaters[theateridx];
+	PlayerMove & mymove = *th.mymoves[myidx];
+	PlayerMove & enemymove = *th.enemymoves[enemyidx];
+
+	while (mymove.outcomes.size() <= enemyidx) {
+		mymove.outcomes.push_back(PlayerMove::VsOutcome(numeric_limits<float>::max(), -1));
+	}
+	while (enemymove.outcomes.size() <= myidx) {
+		enemymove.outcomes.push_back(PlayerMove::VsOutcome(numeric_limits<float>::max(), -1));
+	}
+
+	if (mymove.outcomes[enemyidx].improved >= 0) {
+		assert(enemymove.outcomes[myidx].improved >= 0);
+		return;
+	}
+	assert(enemymove.outcomes[myidx].improved < 0);
+
+	float myvalue = 1.0;
+	float enemyvalue = 1.0;
+
+	evaluate_moves(th, mymove, enemymove, myvalue, enemyvalue);
+
+	state.bug << " " << theateridx << ": " << myidx << " vs. " << enemyidx
+		<< "  value " << myvalue << " vs " << enemyvalue << endl;
+
+	mymove.outcomes[enemyidx].value = myvalue;
+	mymove.outcomes[enemyidx].improved = 0;
+	if (myvalue < mymove.worstvalue)
+		mymove.worstvalue = myvalue;
+
+	enemymove.outcomes[myidx].value = enemyvalue;
+	enemymove.outcomes[myidx].improved = 0;
+	if (enemyvalue < enemymove.worstvalue)
+		enemymove.worstvalue = enemyvalue;
+}
+
+void TacticalSms::update_weights(uint theateridx)
 {
 	Theater & th = *d.theaters[theateridx];
 
-	if (th.myevaluated >= th.mymoves.size() && th.enemyevaluated >= th.enemymoves.size())
-		return;
+	state.bug << "update weights in theater " << theateridx << ", perspective: " << (th.ismyperspective ? "mine" : "enemy") << endl;
+
+	d.tmp_candidates.clear();
+	d.tmp_mask.clear();
+
+	float totalweight = 0.0;
+	float totalcounterweight = 0.0;
+	for (uint idx = 0; idx < th.enemymoves.size(); ++idx) {
+		totalweight += th.enemymoves[idx]->weight;
+		totalcounterweight += th.enemymoves[idx]->counterweight;
+	}
+
+	float u = fastrngd() * totalweight * (1.0 / 4.0);
+	float v = fastrngd() * totalcounterweight * (1.0 / 4.0);
+
+	for (uint enemyidx = 0; enemyidx < th.enemymoves.size(); ++enemyidx) {
+		bool select = false;
+
+		u -= th.enemymoves[enemyidx]->weight;
+		if (u <= 0.0) {
+			select = true;
+			while (u <= 0.0)
+				u += totalweight * (1.0 / 4.0);
+		}
+
+		v -= th.enemymoves[enemyidx]->counterweight;
+		if (v <= 0.0) {
+			select = true;
+			while (v <= 0.0)
+				v += totalweight * (1.0 / 4.0);
+		}
+
+		if (select) {
+			state.bug << "    counter candidate: " << enemyidx << endl;
+			d.tmp_candidates.push_back(enemyidx);
+			d.tmp_mask.push_back(false);
+		}
+	}
+
+	//
+	float bestvalue = numeric_limits<float>::min();
 
 	for (uint myidx = 0; myidx < th.mymoves.size(); ++myidx) {
 		PlayerMove & mymove = *th.mymoves[myidx];
 
-		for
-			(uint enemyidx = (myidx < th.myevaluated) ? th.enemyevaluated : 0;
-			 enemyidx < th.enemymoves.size(); ++enemyidx)
-		{
-			PlayerMove & enemymove = *th.enemymoves[enemyidx];
-			float myvalue = 1.0;
-			float enemyvalue = 1.0;
+		for (uint idx = 0; idx < d.tmp_candidates.size(); ++idx)
+			evaluate_pair(theateridx, myidx, d.tmp_candidates[idx]);
 
-			evaluate_moves(th, mymove, enemymove, myvalue, enemyvalue);
+		for (uint idx = 0; idx < d.tmp_candidates.size(); ++idx) {
+			if (mymove.outcomes[d.tmp_candidates[idx]].value <= mymove.worstvalue + EpsilonValue)
+				d.tmp_mask[idx] = true;
+		}
 
-			state.bug << " " << myidx << " vs. " << enemyidx
-				<< "  value " << myvalue << " vs " << enemyvalue << endl;
-//			if (state.turn == 839)
-//				state.bug << OutcomeSms(th, myidx, enemyidx);
+		bestvalue = max(bestvalue, mymove.worstvalue);
+	}
 
-			mymove.outcomes.push_back(PlayerMove::VsOutcome(myvalue));
-			enemymove.outcomes.push_back(PlayerMove::VsOutcome(enemyvalue));
+	//
+	state.bug << "  best value: " << bestvalue << endl;
 
-			if (myvalue < mymove.worstvalue)
-				mymove.worstvalue = myvalue;
-			if (enemyvalue < enemymove.worstvalue)
-				enemymove.worstvalue = enemyvalue;
+	for (uint myidx = 0; myidx < th.mymoves.size(); ++myidx) {
+		PlayerMove & mymove = *th.mymoves[myidx];
+
+		if (mymove.worstvalue >= bestvalue - EpsilonValue) {
+			mymove.weight *= LearnGamma;
+			state.bug << "    move " << myidx << ", new weight: " << mymove.weight << endl;
 		}
 	}
 
-	th.myevaluated = th.mymoves.size();
-	th.enemyevaluated = th.enemymoves.size();
+	for (uint idx = 0; idx < d.tmp_candidates.size(); ++idx) {
+		if (!d.tmp_mask[idx]) {
+			PlayerMove & enemymove = *th.enemymoves[d.tmp_candidates[idx]];
+			enemymove.counterweight /= LearnGamma;
+			state.bug << "    enemy move " << d.tmp_candidates[idx]
+				<< ", new counter-weight: " << enemymove.counterweight << endl;
+		}
+	}
 }
 
 void TacticalSms::generate_theater(const Location & center)
@@ -1093,37 +1188,24 @@ void TacticalSms::pull_moves(uint theateridx)
 	} else {
 		d.nrmoves++;
 		th.needupdate = true;
+		th.mymove = th.mymoves.size() - 1;
+		th.mymove_unchangedrounds = 0;
 	}
 }
 
-bool TacticalSms::get_improve_pair(const vector<PlayerMove *> & moves, uint & myidx, uint & enemyidx)
+bool TacticalSms::get_improve_partner(const vector<PlayerMove *> & moves, uint myidx, uint & enemyidx)
 {
-	float totalvalue = 0.0;
+	PlayerMove & mymove = *moves[myidx];
 
-	for (uint idx = 0; idx < moves.size(); ++idx)
-		totalvalue += moves[idx]->worstvalue;
+	d.tmp_candidates.clear();
+	for (uint idx = 0; idx < mymove.outcomes.size(); ++idx) {
+		if (!mymove.outcomes[idx].improved && mymove.outcomes[idx].value <= mymove.worstvalue + EpsilonValue)
+			d.tmp_candidates.push_back(idx);
+	}
 
-	for (uint tries = 0; tries < 3; ++tries) {
-		double v = fastrngd() * totalvalue;
-
-		myidx = 0;
-		do {
-			v -= moves[myidx++]->worstvalue;
-		} while (v >= 0.0 && myidx < moves.size());
-		myidx--;
-
-		PlayerMove & mymove = *moves[myidx];
-
-		d.tmp_candidates.clear();
-		for (uint idx = 0; idx < mymove.outcomes.size(); ++idx) {
-			if (!mymove.outcomes[idx].improved && mymove.outcomes[idx].value <= mymove.worstvalue + EpsilonValue)
-				d.tmp_candidates.push_back(idx);
-		}
-
-		if (!d.tmp_candidates.empty()) {
-			enemyidx = d.tmp_candidates[fastrng() % d.tmp_candidates.size()];
-			return true;
-		}
+	if (!d.tmp_candidates.empty()) {
+		enemyidx = d.tmp_candidates[fastrng() % d.tmp_candidates.size()];
+		return true;
 	}
 
 	return false;
@@ -1134,50 +1216,90 @@ void TacticalSms::run_theater(uint theateridx)
 	state.bug << "Run tactical theater " << theateridx << " (turn " << state.turn << ")" << endl;
 
 	Theater & th = *d.theaters[theateridx];
-	th.needupdate = false;
 
-	evaluate_new_moves(theateridx);
+	uint init_mymoves = th.mymoves.size();
+	uint init_enemymoves = th.enemymoves.size();
 
-	uint mine_myidx;
+	// Phase 1: find improved moves and update weights
+	uint mine_myidx = th.mymove;
 	uint mine_enemyidx;
+	bool mine;
+
+	for (uint idx = 0; idx < th.enemymoves.size(); ++idx)
+		evaluate_pair(theateridx, mine_myidx, idx);
+	mine = get_improve_partner(th.mymoves, mine_myidx, mine_enemyidx);
+
+	//
 	uint enemy_myidx;
 	uint enemy_enemyidx;
+	bool enemy = false;
 
-	bool mine = get_improve_pair(th.mymoves, mine_myidx, mine_enemyidx);
-	bool enemy = get_improve_pair(th.enemymoves, enemy_enemyidx, enemy_myidx);
+	float totalweight = 0.0;
 
+	for (uint idx = 0; idx < th.enemymoves.size(); ++idx)
+		totalweight += th.enemymoves[idx]->weight;
+
+	for (uint tries = 0; tries < 3 && !enemy; ++tries) {
+		float v = fastrngd() * totalweight;
+
+		enemy_enemyidx = 0;
+		do {
+			v -= th.enemymoves[enemy_enemyidx++]->weight;
+		} while (v >= 0.0 && enemy_enemyidx < th.enemymoves.size());
+		enemy_enemyidx--;
+
+		for (uint idx = 0; idx < th.mymoves.size(); ++idx)
+			evaluate_pair(theateridx, idx, enemy_enemyidx);
+		enemy = get_improve_partner(th.enemymoves, enemy_enemyidx, enemy_myidx);
+	}
+
+	//
 	if (mine || enemy) {
-		if (mine)
-			improve(theateridx, mine_myidx, mine_enemyidx);
 		th.flipsides();
 		if (mine)
 			improve(theateridx, mine_enemyidx, mine_myidx);
 		if (enemy && (!mine || enemy_enemyidx != mine_enemyidx || enemy_myidx != mine_myidx))
 			improve(theateridx, enemy_enemyidx, enemy_myidx);
+		update_weights(theateridx);
 		th.flipsides();
-
-		evaluate_new_moves(theateridx);
+		if (mine)
+			improve(theateridx, mine_myidx, mine_enemyidx);
+		if (enemy && (!mine || enemy_enemyidx != mine_enemyidx || enemy_myidx != mine_myidx))
+			improve(theateridx, enemy_myidx, enemy_enemyidx);
+		update_weights(theateridx);
+	} else {
+		th.flipsides();
+		update_weights(theateridx);
+		th.flipsides();
+		update_weights(theateridx);
 	}
 
-	float bestvalue = numeric_limits<float>::min();
+	// Phase 2: push new sampled move
+	if (init_mymoves != th.mymoves.size() || init_enemymoves != th.enemymoves.size())
+		th.mymove_unchangedrounds = 0;
+
+	totalweight = 0.0;
 	for (uint idx = 0; idx < th.mymoves.size(); ++idx)
-		bestvalue = max(bestvalue, th.mymoves[idx]->worstvalue);
+		totalweight += th.mymoves[idx]->weight;
 
-	state.bug << "Best value is " << bestvalue << ", candidates are:";
+	float v = fastrngd() * totalweight;
+	uint myidx = 0;
+	do {
+		v -= th.mymoves[myidx++]->weight;
+	} while (v >= 0.0 && myidx < th.mymoves.size());
+	myidx--;
 
-	d.tmp_candidates.clear();
-	for (uint idx = 0; idx < th.mymoves.size(); ++idx) {
-		if (th.mymoves[idx]->worstvalue >= bestvalue - EpsilonValue) {
-			d.tmp_candidates.push_back(idx);
-			state.bug << " " << idx;
-		}
-	}
-
-	uint myidx = d.tmp_candidates[fastrng() % d.tmp_candidates.size()];
-
-	state.bug << "; choosing " << myidx << endl;
-
+	state.bug << "Choosing " << myidx << endl;
 	push_moves(theateridx, myidx);
+
+	if (myidx == th.mymove) {
+		th.mymove_unchangedrounds++;
+		if (th.mymove_unchangedrounds >= 4)
+			th.needupdate = false;
+	} else {
+		th.mymove = myidx;
+		th.mymove_unchangedrounds = 0;
+	}
 
 	state.bug << "-----------------------" << endl;
 }

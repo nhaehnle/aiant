@@ -32,9 +32,10 @@ struct TacticalSms : TacticalSmBase {
 	void pull_moves(uint theateridx);
 
 	void evaluate_moves(Theater & th, PlayerMove & pm, PlayerMove & enemymove, float & myvalue, float & enemyvalue);
-	void evaluate_new_moves(uint theateridx);
-	bool get_improve_pair(const std::vector<PlayerMove *> & moves, uint & myidx, uint & enemyidx);
+	void evaluate_pair(uint theateridx, uint myidx, uint enemyidx);
+	bool get_improve_partner(const std::vector<PlayerMove *> & moves, uint myidx, uint & enemyidx);
 	void improve(uint theateridx, uint myidx, uint enemyidx);
+	void update_weights(uint theateridx);
 
 	Data & d;
 };

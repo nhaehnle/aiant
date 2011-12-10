@@ -984,8 +984,8 @@ void TacticalSm::evaluate_new_moves(uint theateridx)
 //			if (state.turn == 839)
 //				state.bug << Outcome(th, myidx, enemyidx);
 
-			mymove.outcomes.push_back(PlayerMove::VsOutcome(myvalue));
-			enemymove.outcomes.push_back(PlayerMove::VsOutcome(enemyvalue));
+			mymove.outcomes.push_back(PlayerMove::VsOutcome(myvalue, 0));
+			enemymove.outcomes.push_back(PlayerMove::VsOutcome(enemyvalue, 0));
 
 			if (myvalue < mymove.worstvalue)
 				mymove.worstvalue = myvalue;
