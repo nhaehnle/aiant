@@ -117,7 +117,7 @@ void Diffusion::run()
 				d.map[cur] -= BorderWeight;
 
 			if (isnan(d.map[cur])) {
-				state.bug << "Diffusion NaN at " << cur << endl;
+				state.bug.time << "Diffusion NaN at " << cur << endl;
 				d.map[cur] = 0.0;
 			}
 		}
