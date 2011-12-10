@@ -11,6 +11,7 @@ using namespace std;
  */
 //@{
 static float EnemyAntWeight = 2.25;
+static float EnemyHillWeight = 10.0;
 static float BorderWeight = 0.1;
 static float DiffusionDecay = 0.95;
 static float DiffusionFlow = 0.4;
@@ -36,6 +37,18 @@ Diffusion::~Diffusion()
 
 void Diffusion::init()
 {
+	EnemyAntWeight = bot.getargfloat("EnemyAntWeight", EnemyAntWeight);
+	EnemyHillWeight = bot.getargfloat("EnemyHillWeight", EnemyHillWeight);
+	BorderWeight = bot.getargfloat("BorderWeight", BorderWeight);
+	DiffusionDecay = bot.getargfloat("DiffusionDecay", DiffusionDecay);
+	DiffusionFlow = bot.getargfloat("DiffusionFlow", DiffusionFlow);
+
+	state.bug.time << "Diffusion parameters: EnemyAntWeight = " << EnemyAntWeight
+		<< ", EnemyHillWeight = " << EnemyHillWeight
+		<< ", BorderWeight = " << BorderWeight
+		<< ", DiffusionDecay = " << DiffusionDecay
+		<< ", DiffusionFlow = " << DiffusionFlow << endl;
+
 	d.map.resize(state.rows, state.cols);
 	d.buddy.resize(state.rows, state.cols);
 }
@@ -91,6 +104,10 @@ void Diffusion::run()
 		d.map[state.enemyAnts[enemyidx]] -= EnemyAntWeight;
 	}
 
+	for (uint enemyhill = 0; enemyhill < state.enemyHills.size(); ++enemyhill) {
+		d.map[state.enemyHills[enemyhill]] -= EnemyHillWeight;
+	}
+
 	Location cur;
 	for (cur.row = 0; cur.row < state.rows; ++cur.row) {
 		for (cur.col = 0; cur.col < state.cols; ++cur.col) {
@@ -98,11 +115,16 @@ void Diffusion::run()
 
 			if (1 >= delta && delta >= -1)
 				d.map[cur] -= BorderWeight;
+
+			if (isnan(d.map[cur])) {
+				state.bug << "Diffusion NaN at " << cur << endl;
+				d.map[cur] = 0.0;
+			}
 		}
 	}
 
 	//
-	for (int iters = 0; iters < 3; ++iters)
+	for (int iters = 0; iters < 2; ++iters)
 		diffuse();
 
 	//
