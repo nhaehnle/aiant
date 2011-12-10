@@ -32,7 +32,7 @@ def main():
 	with open('bots.json', 'r') as filp:
 		settings = json.load(filp)
 
-	maps = helpers.listmaps(settings["ants"] + "maps")
+	maps = [maprec for maprec in helpers.listmaps(settings["ants"] + "maps") if maprec["players"] <= len(settings["bots"])]
 	allbots = [ (name, name[name.rfind('/')+1:]) for name in settings["bots"] ]
 	gameid = getfirstgameid()
 
@@ -40,9 +40,7 @@ def main():
 		maprec = random.choice(maps)
 		print "Game {gameid}: {maprec[players]} player map {maprec[path]}".format(**locals())
 
-		mapbots = []
-		while len(set(mapbots)) <= 1:
-			mapbots = [random.choice(allbots) for i in range(maprec["players"])]
+		mapbots = random.sample(allbots, maprec["players"])
 
 		for i in range(len(mapbots)):
 			print "  {i}: {bot}".format(i=i+1, bot=mapbots[i][1])
