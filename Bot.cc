@@ -10,7 +10,7 @@
 #include "opportunisticattack.h"
 #include "scout.h"
 #include "symmetry.h"
-#include "tactical.h"
+#include "tactical_sm.h"
 #include "zoc.h"
 
 using namespace std;
@@ -53,7 +53,7 @@ Bot::Bot(int argc, char * * argv) :
 	m_opportunisticattack(*new OpportunisticAttack(*this)),
 	m_diffusion(*new Diffusion(*this)),
 	m_offense(*new Offense(*this)),
-	m_tactical(*new Tactical(*this))
+	m_tactical(*new TacticalSm(*this))
 {
 	for (int i = 1; i < argc; i += 2) {
 		if (argv[i][0] != '-' || argv[i][1] != '-') {

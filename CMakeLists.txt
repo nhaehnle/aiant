@@ -6,7 +6,8 @@ add_executable(MyBot
 	MyBot.cc
 	Bot.cc
 	State.cc
-	tactical.cc
+	tactical_sm.cc
+	tactical_smbase.cc
 	diffusion.cc
 	zoc.cc
 	scout.cc

@@ -1,10 +1,10 @@
-#ifndef TACTICAL_H
-#define TACTICAL_H
+#ifndef TACTICAL_SM_H
+#define TACTICAL_SM_H
 
 #include <stdlib.h>
 #include <vector>
 
-#include "module.h"
+#include "tactical_smbase.h"
 
 struct Bot;
 struct Location;
@@ -15,13 +15,13 @@ struct BaseSubmap;
 struct Submap;
 struct State;
 
-struct Tactical : Module {
+struct TacticalSm : TacticalSmBase {
 	struct Data;
 	struct ShadowAnt;
 	struct Theater;
 
-	Tactical(Bot & bot_);
-	~Tactical();
+	TacticalSm(Bot & bot_);
+	~TacticalSm();
 
 	void init();
 	void run();
@@ -40,10 +40,7 @@ struct Tactical : Module {
 	bool get_improve_pair(const std::vector<PlayerMove *> & moves, uint & myidx, uint & enemyidx);
 	void improve(uint theateridx, uint myidx, uint enemyidx);
 
-	Bot & bot;
-	State & state;
-
 	Data & d;
 };
 
-#endif // TACTICAL_H
+#endif // TACTICAL_SM_H
