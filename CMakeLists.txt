@@ -6,8 +6,9 @@ add_executable(MyBot
 	MyBot.cc
 	Bot.cc
 	State.cc
-	zoc.cc
 	tactical.cc
+	diffusion.cc
+	zoc.cc
 	scout.cc
 	hilldefense.cc
 	foodseeker.cc

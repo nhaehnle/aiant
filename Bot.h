@@ -3,6 +3,7 @@
 
 #include "State.h"
 
+struct Diffusion;
 struct FoodSeeker;
 struct HillDefense;
 struct Module;
@@ -54,6 +55,7 @@ struct Bot
 	Scout & m_scout;
 	HillDefense & m_hilldefense;
 	OpportunisticAttack & m_opportunisticattack;
+	Diffusion & m_diffusion;
 	Offense & m_offense;
 	Module & m_tactical;
 	std::vector<Ant> m_ants;

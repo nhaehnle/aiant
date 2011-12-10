@@ -206,10 +206,10 @@ istream& operator>>(istream &is, State &state)
 			else if(inputType == "turns")
 				is >> state.turns;
 			else if(inputType == "player_seed")
-		{
+			{
 				is >> state.seed;
-		rngstate = state.seed;
-		}
+				rngstate = state.seed;
+			}
 			else if(inputType == "viewradius2")
 			{
 				is >> state.viewradius;

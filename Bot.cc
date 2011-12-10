@@ -3,6 +3,7 @@
 
 #include "Bot.h"
 #include "astar.h"
+#include "diffusion.h"
 #include "foodseeker.h"
 #include "hilldefense.h"
 #include "offense.h"
@@ -46,6 +47,7 @@ Bot::Bot(int argc, char * * argv) :
 	m_scout(*new Scout(*this)),
 	m_hilldefense(*new HillDefense(*this)),
 	m_opportunisticattack(*new OpportunisticAttack(*this)),
+	m_diffusion(*new Diffusion(*this)),
 	m_offense(*new Offense(*this)),
 	m_tactical(*new Tactical(*this))
 {
@@ -72,6 +74,7 @@ Bot::~Bot()
 {
 	delete &m_tactical;
 	delete &m_offense;
+	delete &m_diffusion;
 	delete &m_opportunisticattack;
 	delete &m_hilldefense;
 	delete &m_scout;
@@ -108,6 +111,7 @@ void Bot::playGame()
 	m_scout.init();
 	m_hilldefense.init();
 	m_opportunisticattack.init();
+	m_diffusion.init();
 	m_offense.init();
 	m_tactical.init();
 
@@ -260,6 +264,8 @@ void Bot::makeMoves()
 	//
 	m_foodseeker.run();
 
+	state.bug.time << "time after food: " << state.timer.getTime() << "ms" << endl;
+
 	//
 	m_hilldefense.run();
 
@@ -268,6 +274,11 @@ void Bot::makeMoves()
 
 	//
 	m_scout.run();
+
+	state.bug.time << "time before diffusion: " << state.timer.getTime() << "ms" << endl;
+
+	//
+	m_diffusion.run();
 
 	//
 	//m_offense.run();
@@ -278,10 +289,12 @@ void Bot::makeMoves()
 
 		state.bug << "ant " << antidx << " at " << ant.where << " dir " << cdir(ant.direction) << endl;
 
-		Location n = state.getLocation(ant.where, ant.direction);
-		if (state.grid[n.row][n.col].isWater) {
-			state.bug << "  attempt to walk into water" << endl;
-			ant.direction = -1;
+		if (ant.direction >= 0) {
+			Location n = state.getLocation(ant.where, ant.direction);
+			if (state.grid[n.row][n.col].isWater) {
+				state.bug << "  attempt to walk into water" << endl;
+				ant.direction = -1;
+			}
 		}
 
 		if (ant.direction < 0) {

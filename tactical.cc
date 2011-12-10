@@ -806,7 +806,7 @@ struct Improve {
 					checkacceptable(found1);
 				}
 			found1:
-				nm.antmove(myantidx, altdir);
+				pushmove(nm, myantidx, altdir);
 			} else {
 				int altdir = olddir;
 				int dir = (olddir + 1 + (fastrng() & 2)) % TDIRECTIONS;
@@ -822,7 +822,7 @@ struct Improve {
 				dir = -1;
 				checkacceptable(found2);
 			found2:
-				nm.antmove(myantidx, altdir);
+				pushmove(nm, myantidx, altdir);
 			}
 		}
 
