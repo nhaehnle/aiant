@@ -1,4 +1,4 @@
-#include "tactical_sm.h"
+#include "tactical_sms.h"
 
 #include <cassert>
 #include <cstring>
@@ -30,7 +30,7 @@ static const uint AttackNeighboursRadius2 = 10;
 static const int NrAttackNeighboursUpperBound = 49;
 
 
-struct TacticalSm::Theater {
+struct TacticalSms::Theater {
 	bool needupdate;
 	bool ismyperspective;
 	bool aggressive;
@@ -51,12 +51,12 @@ struct TacticalSm::Theater {
 	bool is_duplicate_mymove(uint myidx);
 };
 
-struct TacticalSm::ShadowAnt {
+struct TacticalSms::ShadowAnt {
 	Location pos;
 	bool hastactical;
 };
 
-struct TacticalSm::Data {
+struct TacticalSms::Data {
 	vector<ShadowAnt> myshadowants;
 	vector<Theater *> theaters;
 	uint nrmoves;
@@ -114,7 +114,7 @@ struct TacticalSm::Data {
 	}
 };
 
-void TacticalSm::Theater::reset(Data & d)
+void TacticalSms::Theater::reset(Data & d)
 {
 	needupdate = true;
 	ismyperspective = true;
@@ -134,7 +134,7 @@ void TacticalSm::Theater::reset(Data & d)
 	enemyevaluated = 0;
 }
 
-void TacticalSm::Theater::flipsides()
+void TacticalSms::Theater::flipsides()
 {
 	ismyperspective = !ismyperspective;
 	basesm.flipsides();
@@ -143,7 +143,7 @@ void TacticalSm::Theater::flipsides()
 	swap(myevaluated, enemyevaluated);
 }
 
-bool TacticalSm::Theater::is_duplicate_mymove(uint myidx)
+bool TacticalSms::Theater::is_duplicate_mymove(uint myidx)
 {
 	PlayerMove & pm = *mymoves[myidx];
 
@@ -168,11 +168,11 @@ bool TacticalSm::Theater::is_duplicate_mymove(uint myidx)
 }
 
 
-struct Outcome {
-	TacticalSm::Theater & th;
+struct OutcomeSms {
+	TacticalSms::Theater & th;
 	BaseSubmap<char> map;
 
-	Outcome(TacticalSm::Theater & th, int myidx, int enemyidx) : th(th) {
+	OutcomeSms(TacticalSms::Theater & th, int myidx, int enemyidx) : th(th) {
 		Location local;
 		for (local.row = 0; local.row < Submap::Size; ++local.row) {
 			for (local.col = 0; local.col < Submap::Size; ++local.col) {
@@ -231,7 +231,7 @@ struct Outcome {
 	}
 };
 
-ostream & operator<<(ostream & out, const Outcome & outcome) {
+ostream & operator<<(ostream & out, const OutcomeSms & outcome) {
 	Location local;
 	for (local.row = 0; local.row < Submap::Size; ++local.row) {
 		for (local.col = 0; local.col < Submap::Size; ++local.col) {
@@ -242,22 +242,22 @@ ostream & operator<<(ostream & out, const Outcome & outcome) {
 	return out;
 }
 
-TacticalSm::TacticalSm(Bot & bot_) :
+TacticalSms::TacticalSms(Bot & bot_) :
 	TacticalSmBase(bot_),
 	d(*new Data)
 {
 }
 
-TacticalSm::~TacticalSm()
+TacticalSms::~TacticalSms()
 {
 	delete &d;
 }
 
-void TacticalSm::init()
+void TacticalSms::init()
 {
 	TacticalSmBase::init();
 
-	state.bug.time << "Using TacticalSm" << endl;
+	state.bug.time << "Using TacticalSms" << endl;
 }
 
 struct CloserToCenterCompare {
@@ -269,7 +269,7 @@ struct CloserToCenterCompare {
 };
 
 struct NewMove {
-	NewMove(TacticalSm & t_, TacticalSm::Theater & th_, uint myidxbase, const char * why) :
+	NewMove(TacticalSms & t_, TacticalSms::Theater & th_, uint myidxbase, const char * why) :
 		t(t_), d(t_.d), th(th_), state(t_.state), shouldcommit(false)
 	{
 		state.bug << "Preliminary insert new move " << th.mymoves.size() << " due to " << why
@@ -322,17 +322,17 @@ struct NewMove {
 		shouldcommit = true;
 	}
 
-	TacticalSm & t;
-	TacticalSm::Data & d;
-	TacticalSm::Theater & th;
+	TacticalSms & t;
+	TacticalSms::Data & d;
+	TacticalSms::Theater & th;
 	State & state;
 	bool shouldcommit;
 };
 
 struct Improve {
-	TacticalSm & t;
-	TacticalSm::Data & d;
-	TacticalSm::Theater & th;
+	TacticalSms & t;
+	TacticalSms::Data & d;
+	TacticalSms::Theater & th;
 	State & state;
 	uint myidx;
 	uint enemyidx;
@@ -344,7 +344,7 @@ struct Improve {
 
 	vector<Death> deaths;
 
-	Improve(TacticalSm & t_, TacticalSm::Theater & th_, uint myidx_, uint enemyidx_) :
+	Improve(TacticalSms & t_, TacticalSms::Theater & th_, uint myidx_, uint enemyidx_) :
 		t(t_), d(t_.d), th(th_), state(t_.state),
 		myidx(myidx_), enemyidx(enemyidx_)
 	{
@@ -817,7 +817,7 @@ struct Improve {
 		//
 		compute_deaths();
 
-		state.bug << Outcome(th, myidx, enemyidx);
+		state.bug << OutcomeSms(th, myidx, enemyidx);
 
 		//
 		if (themymove().nrcollided) {
@@ -842,7 +842,7 @@ struct Improve {
  * Look at the outcome of myidx move vs enemyidx move, and try to generate some better
  * alternative moves for myself.
  */
-void TacticalSm::improve(uint theateridx, uint myidx, uint enemyidx)
+void TacticalSms::improve(uint theateridx, uint myidx, uint enemyidx)
 {
 	d.theaters[theateridx]->mymoves[myidx]->outcomes[enemyidx].improved++;
 
@@ -873,7 +873,7 @@ static float hillvalue(const Submap & sm, const Location & pos, bool mine, float
 	return 1.0;
 }
 
-void TacticalSm::evaluate_moves(Theater & th, PlayerMove & mymove, PlayerMove & enemymove, float & myvalue, float & enemyvalue)
+void TacticalSms::evaluate_moves(Theater & th, PlayerMove & mymove, PlayerMove & enemymove, float & myvalue, float & enemyvalue)
 {
 	uint myenemydist = 0;
 
@@ -959,7 +959,7 @@ void TacticalSm::evaluate_moves(Theater & th, PlayerMove & mymove, PlayerMove & 
 	}
 }
 
-void TacticalSm::evaluate_new_moves(uint theateridx)
+void TacticalSms::evaluate_new_moves(uint theateridx)
 {
 	Theater & th = *d.theaters[theateridx];
 
@@ -982,7 +982,7 @@ void TacticalSm::evaluate_new_moves(uint theateridx)
 			state.bug << " " << myidx << " vs. " << enemyidx
 				<< "  value " << myvalue << " vs " << enemyvalue << endl;
 //			if (state.turn == 839)
-//				state.bug << Outcome(th, myidx, enemyidx);
+//				state.bug << OutcomeSms(th, myidx, enemyidx);
 
 			mymove.outcomes.push_back(PlayerMove::VsOutcome(myvalue));
 			enemymove.outcomes.push_back(PlayerMove::VsOutcome(enemyvalue));
@@ -998,7 +998,7 @@ void TacticalSm::evaluate_new_moves(uint theateridx)
 	th.enemyevaluated = th.enemymoves.size();
 }
 
-void TacticalSm::generate_theater(const Location & center)
+void TacticalSms::generate_theater(const Location & center)
 {
 	uint theateridx = d.theaters.size();
 	Theater & th = *d.alloctheater();
@@ -1060,7 +1060,7 @@ void TacticalSm::generate_theater(const Location & center)
 	th.enemymoves[0]->computehash();
 }
 
-void TacticalSm::pull_moves(uint theateridx)
+void TacticalSms::pull_moves(uint theateridx)
 {
 	Theater & th = *d.theaters[theateridx];
 
@@ -1096,7 +1096,7 @@ void TacticalSm::pull_moves(uint theateridx)
 	}
 }
 
-bool TacticalSm::get_improve_pair(const vector<PlayerMove *> & moves, uint & myidx, uint & enemyidx)
+bool TacticalSms::get_improve_pair(const vector<PlayerMove *> & moves, uint & myidx, uint & enemyidx)
 {
 	float totalvalue = 0.0;
 
@@ -1129,7 +1129,7 @@ bool TacticalSm::get_improve_pair(const vector<PlayerMove *> & moves, uint & myi
 	return false;
 }
 
-void TacticalSm::run_theater(uint theateridx)
+void TacticalSms::run_theater(uint theateridx)
 {
 	state.bug << "Run tactical theater " << theateridx << " (turn " << state.turn << ")" << endl;
 
@@ -1182,7 +1182,7 @@ void TacticalSm::run_theater(uint theateridx)
 	state.bug << "-----------------------" << endl;
 }
 
-void TacticalSm::push_moves(uint theateridx, uint myidx)
+void TacticalSms::push_moves(uint theateridx, uint myidx)
 {
 	Theater & th = *d.theaters[theateridx];
 	const PlayerMove & move = *th.mymoves[myidx];
@@ -1200,7 +1200,7 @@ void TacticalSm::push_moves(uint theateridx, uint myidx)
 	}
 }
 
-bool TacticalSm::timeover()
+bool TacticalSms::timeover()
 {
 	return bot.timeover();
 #if 0
@@ -1213,7 +1213,7 @@ bool TacticalSm::timeover()
 #endif
 }
 
-void TacticalSm::run()
+void TacticalSms::run()
 {
 	d.reset();
 

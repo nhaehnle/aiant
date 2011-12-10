@@ -67,3 +67,49 @@ void TacticalSmBase::init()
 		<< "  AggressionThresholdShift = " << AggressionThresholdShift
 		<< ", AggressionScale = " << AggressionScale << endl;
 }
+
+void TacticalSmBase::gensubmap_field(Submap & sm, const Location & local, const Location & global)
+{
+	Square & sq = state.grid[global.row][global.col];
+	unsigned char & field = sm[local];
+	if (sq.isFood) {
+		field = Submap::Food;
+	} else {
+		field = 0;
+		if (sq.ant >= 0) {
+			field |= Submap::Ant;
+			if (sq.ant > 0)
+				field |= Submap::Enemy;
+			else
+				field |= Submap::Mine;
+		}
+		if (sq.isHill) {
+			if (sq.hillPlayer > 0)
+				field |= Submap::Hill | Submap::Enemy;
+			else if (sq.hillPlayer == 0)
+				field |= Submap::Hill | Submap::Mine;
+		}
+	}
+}
+
+/**
+ * Generate a tactical map centered at \p center
+ */
+void TacticalSmBase::gensubmap(Submap & sm, const Location & center)
+{
+	Location local;
+	for (local.row = 0; local.row < Submap::Size; ++local.row) {
+		for (local.col = 0; local.col < Submap::Size; ++local.col) {
+			Location global
+				((center.row + local.row + state.rows - Submap::Radius) % state.rows,
+				 (center.col + local.col + state.cols - Submap::Radius) % state.cols);
+
+			if (state.grid[global.row][global.col].isWater) {
+				sm[local] = Submap::Water;
+			} else {
+				gensubmap_field(sm, local, global);
+			}
+		}
+	}
+}
+

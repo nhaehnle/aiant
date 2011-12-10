@@ -8,11 +8,15 @@
 #include "State.h"
 
 struct Bot;
+struct Submap;
 
 struct TacticalSmBase : Module {
 	TacticalSmBase(Bot & b);
 
 	virtual void init();
+
+	void gensubmap(Submap & sm, const Location & center);
+	void gensubmap_field(Submap & sm, const Location & local, const Location & global);
 
 	Bot & bot;
 	State & state;

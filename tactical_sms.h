@@ -1,5 +1,5 @@
-#ifndef TACTICAL_SM_H
-#define TACTICAL_SM_H
+#ifndef TACTICAL_SMS_H
+#define TACTICAL_SMS_H
 
 #include <stdlib.h>
 #include <vector>
@@ -14,13 +14,13 @@ struct BaseSubmap;
 struct Submap;
 struct State;
 
-struct TacticalSm : TacticalSmBase {
+struct TacticalSms : TacticalSmBase {
 	struct Data;
 	struct ShadowAnt;
 	struct Theater;
 
-	TacticalSm(Bot & bot_);
-	~TacticalSm();
+	TacticalSms(Bot & bot_);
+	~TacticalSms();
 
 	void init();
 	void run();
@@ -39,4 +39,4 @@ struct TacticalSm : TacticalSmBase {
 	Data & d;
 };
 
-#endif // TACTICAL_SM_H
+#endif // TACTICAL_SMS_H
