@@ -10,9 +10,9 @@ using namespace std;
  * Tweakable parameters
  */
 //@{
-static float EnemyAntWeight = 2.25;
+static float EnemyAntWeight = 3.0;
 static float EnemyHillWeight = 10.0;
-static float BorderWeight = 0.1;
+static float BorderWeight = 0.2;
 static float DiffusionDecay = 0.95;
 static float DiffusionFlow = 0.4;
 //@}
