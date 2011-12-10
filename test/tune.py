@@ -84,6 +84,7 @@ class MutationSchedule(object):
 
 	def nextmutation(self):
 		sigma = self.sigmaschedule[self.round % len(self.sigmaschedule)]
+		self.round += 1
 		return [(key, sigma) for key in self.keys]
 
 class TuneGroup(object):
