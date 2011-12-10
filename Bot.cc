@@ -16,7 +16,8 @@
 using namespace std;
 
 static const uint KeepDirpermTurns = 64;
-
+static const float SafetyMarginMs = 40.0;
+static const float SafetyMult = 5.0;
 
 void Ant::reset()
 {
@@ -35,6 +36,9 @@ struct Bot::Data {
 	};
 	std::map<std::string, Argument> args;
 
+	double turntime;
+	double lastchecktime;
+	double checkavg[4];
 	Map<bool> claimed;
 };
 
@@ -68,6 +72,8 @@ Bot::Bot(int argc, char * * argv) :
 		state.bug.time << "Command line argument: " << key << " = " << value << endl;
 		d.args.insert(make_pair(key, Data::Argument(value)));
 	}
+
+	d.checkavg[0] = d.checkavg[1] = d.checkavg[2] = d.checkavg[3] = 1.0;
 }
 
 Bot::~Bot()
@@ -94,6 +100,28 @@ float Bot::getargfloat(const std::string & key, float def)
 	return strtof(it->second.value.c_str(), 0);
 }
 
+bool Bot::timeover()
+{
+	double t = state.timer.getTime();
+	if
+		((t + SafetyMarginMs + SafetyMult * d.checkavg[0] > d.turntime) ||
+		 (t + SafetyMarginMs + SafetyMult * d.checkavg[1] > d.turntime) ||
+		 (t + SafetyMarginMs + SafetyMult * d.checkavg[2] > d.turntime) ||
+		 (t + SafetyMarginMs + SafetyMult * d.checkavg[3] > d.turntime))
+		return true;
+
+	if (d.lastchecktime >= 0.0) {
+		double delta = t - d.lastchecktime;
+		d.checkavg[0] = (d.checkavg[0] * 0.66) + (delta * 0.34);
+		d.checkavg[1] = (d.checkavg[1] * 0.9) + (delta * 0.1);
+		d.checkavg[2] = (d.checkavg[2] * 0.99) + (delta * 0.01);
+		d.checkavg[3] = (d.checkavg[3] * 0.999) + (delta * 0.001);
+	}
+
+	d.lastchecktime = t;
+	return false;
+}
+
 //plays a single game of Ants.
 void Bot::playGame()
 {
@@ -103,6 +131,7 @@ void Bot::playGame()
 	endTurn();
 
 	d.claimed.resize(state.rows, state.cols);
+	d.turntime = getargfloat("turntime", state.turntime);
 
 	//
 	m_zoc.init();
@@ -168,11 +197,6 @@ bool Bot::try_rotate_move(uint antidx)
 
 void Bot::make_moves()
 {
-	d.claimed.fill(false);
-
-	for (uint foodidx = 0; foodidx < state.food.size(); ++foodidx)
-		d.claimed[state.food[foodidx]] = true;
-
 	for (uint antidx = 0; antidx < m_ants.size(); ++antidx) {
 		Ant & ant = m_ants[antidx];
 		Location moveto;
@@ -253,11 +277,18 @@ void Bot::makeMoves()
 	state.bug.time << "turn " << state.turn << ":" << endl;
 	state.bug << state << endl;
 
+	d.lastchecktime = -1.0;
+
 	m_zoc.update();
 	//m_symmetry.run();
 
 	//
 	update_ants();
+
+	d.claimed.fill(false);
+
+	for (uint foodidx = 0; foodidx < state.food.size(); ++foodidx)
+		d.claimed[state.food[foodidx]] = true;
 
 	state.bug.time << "time after maintenance: " << state.timer.getTime() << "ms" << endl;
 
@@ -324,7 +355,8 @@ void Bot::makeMoves()
 	//
 	make_moves();
 
-	state.bug.time << "time taken in turn " << state.turn << ": " << state.timer.getTime() << "ms" << endl << endl;
+	state.bug.time << "time taken in turn " << state.turn << ": " << state.timer.getTime() << "ms, checkavg: "
+		<< d.checkavg[0] << " " << d.checkavg[1] << " " << d.checkavg[2] << " " << d.checkavg[3] << endl << endl;
 }
 
 //finishes the turn

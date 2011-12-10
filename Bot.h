@@ -46,6 +46,8 @@ struct Bot
 	bool try_rotate_move(uint antidx);
 	void make_moves();
 
+	bool timeover();
+
 	struct Data;
 
 	Data & d;

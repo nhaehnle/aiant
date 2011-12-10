@@ -1542,12 +1542,15 @@ void Tactical::push_moves(uint theateridx, uint myidx)
 
 bool Tactical::timeover()
 {
+	return bot.timeover();
+#if 0
 	if (d.nrevals > MaxEval) {
 		state.bug << "Max number of evals exceeded" << endl;
 		return true;
 	}
 
 	return false;
+#endif
 }
 
 void Tactical::run()
