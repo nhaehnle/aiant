@@ -28,7 +28,7 @@ static float ValueHill = 2.0;
 static float ValueEnemyDist = 0.999;
 
 static uint MinAggressionAnts = 4;
-static float AggressionThresholdShift = 0.0;
+static float AggressionThresholdShift = -3.0;
 static float AggressionScale = 1.0;
 //@}
 
