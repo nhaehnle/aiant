@@ -131,7 +131,7 @@ void Diffusion::run()
 	for (uint antidx = 0; antidx < bot.m_ants.size(); ++antidx) {
 		Ant & ant = bot.m_ants[antidx];
 
-		if (ant.direction >= 0)
+		if (ant.assigneddirection)
 			continue;
 
 		float bestvalue = 0.0;
@@ -153,6 +153,7 @@ void Diffusion::run()
 		if (bestdir >= 0 && bestvalue < d.map[ant.where]) {
 			state.bug << "diffusion move ant at " << ant.where << " to " << cdir(bestdir) << endl;
 			ant.direction = bestdir;
+			ant.assigneddirection = true;
 		}
 	}
 }

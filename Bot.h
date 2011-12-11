@@ -15,6 +15,7 @@ struct Zoc;
 
 struct Ant {
 	Location where;
+	bool assigneddirection;
 	int direction;
 	const int * dirperm;
 

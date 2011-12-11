@@ -42,8 +42,9 @@ void OpportunisticAttack::run()
 			if (state.grid[cur.row][cur.col].ant == 0) {
 				uint antidx = bot.myantidx_at(cur);
 				Ant & ant = bot.m_ants[antidx];
-				if (ant.direction < 0) {
+				if (!ant.assigneddirection) {
 					ant.direction = reversedir(astar.getlaststep(cur));
+					ant.assigneddirection = true;
 					state.bug << "  send ant " << antidx << " at " << ant.where
 						<< " in direction " << cdir(ant.direction) << endl;
 				}

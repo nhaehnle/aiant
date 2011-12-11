@@ -77,11 +77,15 @@ void FoodSeeker::assign_food()
 			uint antidx = bot.myantidx_at(where);
 			Ant & ant = bot.m_ants[antidx];
 
-			if (ant.direction >= 0)
+			if (ant.assigneddirection)
 				continue;
 
 			Location foodwhere = astar.getsource(where);
-			ant.direction = reversedir(astar.getlaststep(where));
+			if (cost <= 1)
+				ant.direction = -1;
+			else
+				ant.direction = reversedir(astar.getlaststep(where));
+			ant.assigneddirection = true;
 
 			state.bug << "ant " << antidx << " at " << where
 				<< " assigned to food at " << foodwhere << " (" << CDIRECTIONS[ant.direction] << "), distance " << cost << endl;

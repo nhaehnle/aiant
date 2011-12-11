@@ -1226,7 +1226,7 @@ void TacticalSms::run_theater(uint theateridx)
 
 	// Phase 1: find improved moves and update weights
 	uint mine_myidx = th.mymove;
-	uint mine_enemyidx;
+	uint mine_enemyidx = 0;
 	bool mine;
 
 	for (uint idx = 0; idx < th.enemymoves.size(); ++idx)
@@ -1234,7 +1234,7 @@ void TacticalSms::run_theater(uint theateridx)
 	mine = get_improve_partner(th.mymoves, mine_myidx, mine_enemyidx);
 
 	//
-	uint enemy_myidx;
+	uint enemy_myidx = 0;
 	uint enemy_enemyidx;
 	bool enemy = false;
 

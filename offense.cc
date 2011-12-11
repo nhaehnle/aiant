@@ -210,7 +210,7 @@ void Offense::run()
 	vector<AttackCandidate> unassignedants;
 
 	for (uint antidx = 0; antidx < bot.m_ants.size(); ++antidx) {
-		if (bot.m_ants[antidx].direction < 0)
+		if (!bot.m_ants[antidx].assigneddirection)
 			unassignedants.push_back(AttackCandidate(antidx));
 	}
 
@@ -276,5 +276,6 @@ void Offense::run()
 
 		state.bug << "  ant " << unassignedants[idx].antidx << " at " << ant.where << " to " << cdir(bestdir) << endl;
 		ant.direction = bestdir;
+		ant.assigneddirection = true;
 	}
 }

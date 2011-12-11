@@ -21,6 +21,7 @@ static const float SafetyMult = 5.0;
 
 void Ant::reset()
 {
+	assigneddirection = false;
 	direction = -1;
 	if (!dirperm || (fastrng() % KeepDirpermTurns) == 0)
 		dirperm = getdirperm();
@@ -325,10 +326,11 @@ void Bot::makeMoves()
 			if (state.grid[n.row][n.col].isWater) {
 				state.bug << "  attempt to walk into water" << endl;
 				ant.direction = -1;
+				ant.assigneddirection = false;
 			}
 		}
 
-		if (ant.direction < 0) {
+		if (!ant.assigneddirection) {
 			// not looking for food, go towards enemy territory
 			uint my = m_zoc.m_enemy[ant.where];
 			const int * dirperm = ant.dirperm;
@@ -340,6 +342,7 @@ void Bot::makeMoves()
 					if (m_zoc.m_enemy[loc] < my) {
 						state.bug << "  zoc move " << cdir(dir) << endl;
 						ant.direction = dir;
+						ant.assigneddirection = true;
 						break;
 					}
 				}

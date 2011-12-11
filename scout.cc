@@ -211,7 +211,7 @@ void Scout::run()
 
 	for (uint i = 0; i < d.nrscouts; ++i) {
 		Ant & ant = bot.m_ants[ants[i]];
-		if (ant.direction >= 0)
+		if (ant.assigneddirection)
 			continue;
 
 		int my = d.scoutmap[ant.where];
@@ -225,6 +225,7 @@ void Scout::run()
 			if (d.scoutmap[n] > my) {
 				state.bug << "Scout " << i << "  ant " << ants[i] << " at " << ant.where << " move " << cdir(dir) << endl;
 				ant.direction = dir;
+				ant.assigneddirection = true;
 				break;
 			}
 		}

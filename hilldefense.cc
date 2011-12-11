@@ -262,7 +262,7 @@ void HillDefense::run()
 
 		state.bug << "  assign ant " << bestantidx << " at " << ant.where << " to defend " << hd->pos << endl;
 
-		if (ant.direction >= 0)
+		if (ant.assigneddirection)
 			continue;
 
 		uint equivdanger = bot.m_zoc.m_enemy[ant.where] + hd->dist[ant.where];
@@ -301,6 +301,7 @@ void HillDefense::run()
 		state.bug << "    defense move: " << cdir(bestdirection) << endl;
 
 		ant.direction = bestdirection;
+		ant.assigneddirection = true;
 	}
 }
 
