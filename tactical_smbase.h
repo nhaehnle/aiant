@@ -4,27 +4,39 @@
 #include <cassert>
 #include <cstdlib>
 
+#include "map.h"
 #include "module.h"
 #include "State.h"
 
 struct Bot;
 struct Submap;
 
+static const uint MaxFoodDist = 16;
+
 struct TacticalSmBase : Module {
 	TacticalSmBase(Bot & b);
+	virtual ~TacticalSmBase();
 
 	virtual void init();
 
 	void gensubmap(Submap & sm, const Location & center);
 	void gensubmap_field(Submap & sm, const Location & local, const Location & global);
+	void compute_fooddists();
+
+	struct BaseData;
 
 	Bot & bot;
 	State & state;
+	BaseData & bd;
+
+	Map<uint32_t> fooddist;
 
 	float ValueKill;
 	float ValueLoss;
 	float ValueHill;
+	float ValueEat;
 	float ValueEnemyDist;
+	float ValueFoodDist;
 
 	uint MinAggressionAnts;
 	float AggressionThresholdShift;

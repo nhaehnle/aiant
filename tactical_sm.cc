@@ -876,6 +876,8 @@ static float hillvalue(const Submap & sm, const Location & pos, bool mine, float
 void TacticalSm::evaluate_moves(Theater & th, PlayerMove & mymove, PlayerMove & enemymove, float & myvalue, float & enemyvalue)
 {
 	uint myenemydist = 0;
+	int myfooddist = 0;
+	int enemyfooddist = 0;
 
 	d.nrevals++;
 
@@ -915,10 +917,18 @@ void TacticalSm::evaluate_moves(Theater & th, PlayerMove & mymove, PlayerMove & 
 				myvalue *= ValueLoss;
 			enemyvalue *= ValueKill;
 		} else {
+			Location global = state.addLocations(am.pos, th.offset);
 			float hv = hillvalue(th.basesm, am.pos, true, ValueHill);
 			myvalue *= hv;
 			enemyvalue *= 1.0 / hv;
-			myenemydist += bot.m_zoc.m_enemy[state.addLocations(am.pos, th.offset)];
+			myenemydist += bot.m_zoc.m_enemy[global];
+
+			uint fd = fooddist[global];
+			myfooddist += fd;
+			if (fd == 1) {
+				myvalue *= ValueEat;
+				enemyvalue /= ValueEat;
+			}
 		}
 	}
 
@@ -955,8 +965,20 @@ void TacticalSm::evaluate_moves(Theater & th, PlayerMove & mymove, PlayerMove & 
 			float hv = hillvalue(th.basesm, am.pos, false, ValueHill);
 			enemyvalue *= hv;
 			myvalue *= 1.0 / hv;
+
+			Location global = state.addLocations(am.pos, th.offset);
+			uint fd = fooddist[global];
+			enemyfooddist += fooddist[global];
+			if (fd == 1) {
+				enemyvalue *= ValueEat;
+				myvalue /= ValueEat;
+			}
 		}
 	}
+
+	float foodfactor = pow(ValueFoodDist, myfooddist - enemyfooddist);
+	myvalue *= foodfactor;
+	enemyvalue /= foodfactor;
 }
 
 void TacticalSm::evaluate_new_moves(uint theateridx)
@@ -1216,6 +1238,7 @@ bool TacticalSm::timeover()
 void TacticalSm::run()
 {
 	d.reset();
+	compute_fooddists();
 
 	d.myshadowants.resize(bot.m_ants.size());
 	for (uint antidx = 0; antidx < bot.m_ants.size(); ++antidx) {

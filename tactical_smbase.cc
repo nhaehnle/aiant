@@ -36,18 +36,30 @@ ostream & operator<<(ostream & out, const Submap & sm)
 	return out;
 }
 
+struct TacticalSmBase::BaseData {
+	vector<Location> queue;
+};
+
 TacticalSmBase::TacticalSmBase(Bot & b) :
 	bot(b),
-	state(b.state)
+	state(b.state),
+	bd(*new BaseData)
 {
 	ValueKill = 3.0;
 	ValueLoss = 0.25;
 	ValueHill = 2.0;
-	ValueEnemyDist = 0.999;
+	ValueEnemyDist = 0.9999;
+	ValueFoodDist = 0.99;
+	ValueEat = 1.334;
 
 	MinAggressionAnts = 4;
 	AggressionThresholdShift = -6.0;
 	AggressionScale = 1.0;
+}
+
+TacticalSmBase::~TacticalSmBase()
+{
+	delete &bd;
 }
 
 void TacticalSmBase::init()
@@ -55,17 +67,23 @@ void TacticalSmBase::init()
 	ValueKill = bot.getargfloat("ValueKill", ValueKill);
 	ValueLoss = bot.getargfloat("ValueLoss", ValueLoss);
 	ValueHill = bot.getargfloat("ValueHill", ValueHill);
+	ValueEat = bot.getargfloat("ValueEat", ValueEat);
 	ValueEnemyDist = bot.getargfloat("ValueEnemyDist", ValueEnemyDist);
+	ValueFoodDist = bot.getargfloat("ValueFoodDist", ValueFoodDist);
 
 	AggressionThresholdShift = bot.getargfloat("AggressionThresholdShift", AggressionThresholdShift);
 	AggressionScale = bot.getargfloat("AggressionScale", AggressionScale);
 
 	state.bug.time << "Tactical parameters: ValueKill = " << ValueKill
 		<< ", ValueLoss = " << ValueLoss
-		<< ", ValueHill = " << ValueHill
-		<< ", ValueEnemyDist = " << ValueEnemyDist << endl
+		<< ", ValueHill = " << ValueHill << endl
+		<< "  ValueEnemyDist = " << ValueEnemyDist
+		<< ", ValueFoodDist = " << ValueFoodDist
+		<< ", ValueEat = " << ValueEat << endl
 		<< "  AggressionThresholdShift = " << AggressionThresholdShift
 		<< ", AggressionScale = " << AggressionScale << endl;
+
+	fooddist.resize(state.rows, state.cols);
 }
 
 void TacticalSmBase::gensubmap_field(Submap & sm, const Location & local, const Location & global)
@@ -113,3 +131,31 @@ void TacticalSmBase::gensubmap(Submap & sm, const Location & center)
 	}
 }
 
+void TacticalSmBase::compute_fooddists()
+{
+	fooddist.fill(MaxFoodDist);
+	bd.queue.clear();
+
+	for (uint idx = 0; idx < state.food.size(); ++idx) {
+		const Location & food = state.food[idx];
+		fooddist[food] = 0;
+		bd.queue.push_back(food);
+	}
+
+	uint queue_head = 0;
+	while (queue_head < bd.queue.size()) {
+		Location cur = bd.queue[queue_head++];
+		uint ndist = fooddist[cur] + 1;
+
+		for (int dir = 0; dir < TDIRECTIONS; ++dir) {
+			Location n = state.getLocation(cur, dir);
+			if (state.grid[n.row][n.col].isWater)
+				continue;
+
+			if (fooddist[n] > ndist) {
+				fooddist[n] = ndist;
+				bd.queue.push_back(n);
+			}
+		}
+	}
+}
