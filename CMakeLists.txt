@@ -9,6 +9,7 @@ add_executable(MyBot
 	tactical_sm.cc
 	tactical_sms.cc
 	tactical_smbase.cc
+	tactical_sample.cc
 	diffusion.cc
 	zoc.cc
 	scout.cc

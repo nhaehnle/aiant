@@ -35,7 +35,6 @@ struct Map {
 		return m_data[pos.row * cols + pos.col];
 	}
 
-private:
 	uint rows;
 	uint cols;
 	std::vector<Type> m_data;
