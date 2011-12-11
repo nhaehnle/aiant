@@ -260,6 +260,10 @@ void TacticalSms::init()
 	TacticalSmBase::init();
 
 	state.bug.time << "Using TacticalSms" << endl;
+
+	LearnGamma = bot.getargfloat("LearnGamma", LearnGamma);
+
+	state.bug.time << "LearnGamma = " << LearnGamma << endl;
 }
 
 struct CloserToCenterCompare {
@@ -1337,6 +1341,8 @@ bool TacticalSms::timeover()
 
 void TacticalSms::run()
 {
+	uint nrtheaters = 0;
+
 	d.reset();
 
 	d.myshadowants.resize(bot.m_ants.size());
@@ -1380,7 +1386,11 @@ void TacticalSms::run()
 			break;
 
 		run_theater(theateridx);
+		nrtheaters++;
 	}
 
-	state.bug.time << "Total number of generated moves: " << d.nrmoves << ", evaluated pairs: " << d.nrevals << endl;
+	state.bug.time << "Total number of generated moves: " << d.nrmoves
+		<< ", evaluated pairs: " << d.nrevals
+		<< ", theater rounds: " << nrtheaters
+		<< " in " << d.theaters.size() << " theaters" << endl;
 }
