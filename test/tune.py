@@ -194,7 +194,7 @@ def getfirstgameid():
 def main():
 	global MINGAMES
 
-	trueskill.SetParameters(beta=25.0/3.0, draw_probability=0.3)
+	trueskill.SetParameters(beta=25.0/6.0, draw_probability=0.3)
 
 	with open(sys.argv[1], 'r') as filp:
 		settings = json.load(filp)
