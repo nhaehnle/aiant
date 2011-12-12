@@ -36,6 +36,9 @@ struct TacticalSm : TacticalSmBase {
 	bool get_improve_pair(const std::vector<PlayerMove *> & moves, uint & myidx, uint & enemyidx);
 	void improve(uint theateridx, uint myidx, uint enemyidx);
 
+	uint choose_max_min_move(uint theateridx);
+	uint choose_max_avg_move(uint theateridx);
+
 	Data & d;
 };
 

@@ -68,6 +68,7 @@ struct TacticalSm::Data {
 	vector<Theater *> unusedtheaters;
 
 	vector<uint> tmp_candidates;
+	vector<float> tmp_values;
 
 	Data() {reset();}
 	~Data() {
@@ -1157,6 +1158,73 @@ bool TacticalSm::get_improve_pair(const vector<PlayerMove *> & moves, uint & myi
 	return false;
 }
 
+uint TacticalSm::choose_max_min_move(uint theateridx)
+{
+	Theater & th = *d.theaters[theateridx];
+
+	float bestvalue = numeric_limits<float>::min();
+	for (uint idx = 0; idx < th.mymoves.size(); ++idx)
+		bestvalue = max(bestvalue, th.mymoves[idx]->worstvalue);
+
+	state.bug << theateridx << ": best value is " << bestvalue << ", candidates are:";
+
+	d.tmp_candidates.clear();
+	for (uint idx = 0; idx < th.mymoves.size(); ++idx) {
+		if (th.mymoves[idx]->worstvalue >= bestvalue - EpsilonValue) {
+			d.tmp_candidates.push_back(idx);
+			state.bug << " " << idx;
+		}
+	}
+
+	uint myidx = d.tmp_candidates[fastrng() % d.tmp_candidates.size()];
+
+	state.bug << "; choosing " << myidx << endl;
+
+	return myidx;
+}
+
+uint TacticalSm::choose_max_avg_move(uint theateridx)
+{
+	Theater & th = *d.theaters[theateridx];
+
+	float bestvalue = numeric_limits<float>::min();
+
+	// needs to be recalculated each time due to indirect effects
+	d.tmp_values.clear();
+	for (uint myidx = 0; myidx < th.mymoves.size(); ++myidx) {
+		PlayerMove & mymove = *th.mymoves[myidx];
+		float value = 0.0;
+
+		for (uint enemyidx = 0; enemyidx < mymove.outcomes.size(); ++enemyidx) {
+			PlayerMove & enemymove = *th.enemymoves[enemyidx];
+
+			value += mymove.outcomes[enemyidx].value * enemymove.worstvalue;
+		}
+
+		d.tmp_values.push_back(value);
+		if (value > bestvalue)
+			bestvalue = value;
+	}
+
+	//
+	d.tmp_candidates.clear();
+
+	state.bug << theateridx << ": best avg value is " << bestvalue << ", candidates are:";
+
+	for (uint idx = 0; idx < d.tmp_values.size(); ++idx) {
+		if (d.tmp_values[idx] >= bestvalue - EpsilonValue) {
+			d.tmp_candidates.push_back(idx);
+			state.bug << " " << idx;
+		}
+	}
+
+	uint myidx = d.tmp_candidates[fastrng() % d.tmp_candidates.size()];
+
+	state.bug << "; choosing " << myidx << endl;
+
+	return myidx;
+}
+
 void TacticalSm::run_theater(uint theateridx)
 {
 	state.bug << "Run tactical theater " << theateridx << " (turn " << state.turn << ")" << endl;
@@ -1187,24 +1255,8 @@ void TacticalSm::run_theater(uint theateridx)
 		evaluate_new_moves(theateridx);
 	}
 
-	float bestvalue = numeric_limits<float>::min();
-	for (uint idx = 0; idx < th.mymoves.size(); ++idx)
-		bestvalue = max(bestvalue, th.mymoves[idx]->worstvalue);
-
-	state.bug << "Best value is " << bestvalue << ", candidates are:";
-
-	d.tmp_candidates.clear();
-	for (uint idx = 0; idx < th.mymoves.size(); ++idx) {
-		if (th.mymoves[idx]->worstvalue >= bestvalue - EpsilonValue) {
-			d.tmp_candidates.push_back(idx);
-			state.bug << " " << idx;
-		}
-	}
-
-	uint myidx = d.tmp_candidates[fastrng() % d.tmp_candidates.size()];
-
-	state.bug << "; choosing " << myidx << endl;
-
+	//
+	uint myidx = choose_max_avg_move(theateridx);
 	push_moves(theateridx, myidx);
 
 	state.bug << "-----------------------" << endl;
