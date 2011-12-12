@@ -48,7 +48,7 @@ struct TacticalSm::Theater {
 
 	void reset(Data & d);
 	void flipsides();
-	bool is_duplicate_mymove(uint myidx);
+	bool is_duplicate_mymove(Data & d, uint myidx);
 };
 
 struct TacticalSm::ShadowAnt {
@@ -61,6 +61,8 @@ struct TacticalSm::Data {
 	vector<Theater *> theaters;
 	uint nrmoves;
 	uint nrevals;
+	uint nrfullduplicatechecks;
+	uint nrfullduplicatesuccess;
 
 	vector<PlayerMove *> unusedmoves;
 	vector<Theater *> unusedtheaters;
@@ -84,6 +86,8 @@ struct TacticalSm::Data {
 	void reset() {
 		nrmoves = 0;
 		nrevals = 0;
+		nrfullduplicatechecks = 0;
+		nrfullduplicatesuccess = 0;
 		myshadowants.clear();
 
 		while (!theaters.empty()) {
@@ -143,7 +147,7 @@ void TacticalSm::Theater::flipsides()
 	swap(myevaluated, enemyevaluated);
 }
 
-bool TacticalSm::Theater::is_duplicate_mymove(uint myidx)
+bool TacticalSm::Theater::is_duplicate_mymove(Data & d, uint myidx)
 {
 	PlayerMove & pm = *mymoves[myidx];
 
@@ -155,10 +159,12 @@ bool TacticalSm::Theater::is_duplicate_mymove(uint myidx)
 		if (other.hash != pm.hash)
 			continue;
 
-		for (uint antidx = 0; antidx < pm.antmoves.size(); ++antidx) {
-			if (pm.antmoves[antidx].direction != other.antmoves[antidx].direction)
+		d.nrfullduplicatechecks++;
+		for (int idx = 0; idx < Submap::Size * Submap::Size; ++idx) {
+			if (pm.map.map[idx] != other.map.map[idx])
 				goto notequal;
 		}
+		d.nrfullduplicatesuccess++;
 
 		return true;
 	notequal: ;
@@ -314,7 +320,7 @@ struct NewMove {
 		PlayerMove & pm = move();
 		pm.computehash();
 
-		if (th.is_duplicate_mymove(th.mymoves.size() - 1)) {
+		if (th.is_duplicate_mymove(d, th.mymoves.size() - 1)) {
 			state.bug << "New move is equal to an old move" << endl;
 			return;
 		}
@@ -1108,7 +1114,7 @@ void TacticalSm::pull_moves(uint theateridx)
 
 	pm.computehash();
 
-	if (th.is_duplicate_mymove(th.mymoves.size() - 1)) {
+	if (th.is_duplicate_mymove(d, th.mymoves.size() - 1)) {
 		d.unusedmoves.push_back(&pm);
 		th.mymoves.pop_back();
 		state.bug << "  no new moves" << endl;
@@ -1283,5 +1289,6 @@ void TacticalSm::run()
 		run_theater(theateridx);
 	}
 
-	state.bug.time << "Total number of generated moves: " << d.nrmoves << ", evaluated pairs: " << d.nrevals << endl;
+	state.bug.time << "Total number of generated moves: " << d.nrmoves << ", evaluated pairs: " << d.nrevals
+		<< ", duplicate checks: " << d.nrfullduplicatesuccess << " / " << d.nrfullduplicatechecks << endl;
 }

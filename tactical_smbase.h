@@ -209,8 +209,8 @@ struct PlayerMove {
 
 	void computehash() {
 		hash = 0;
-		for (uint idx = 0; idx < antmoves.size(); ++idx)
-			hash = (hash * 5) + antmoves[idx].direction;
+		for (uint idx = 0; idx < Submap::Size * Submap::Size; ++idx)
+			hash = (hash * 312007) + map.map[idx];
 	}
 
 	void ant_mark(uint idx) {

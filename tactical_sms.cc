@@ -149,6 +149,8 @@ bool TacticalSms::Theater::is_duplicate_mymove(uint myidx)
 {
 	PlayerMove & pm = *mymoves[myidx];
 
+	abort(); // this needs to be updated
+
 	for (uint idx = 0; idx < mymoves.size(); ++idx) {
 		if (idx == myidx)
 			continue;
