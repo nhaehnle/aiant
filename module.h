@@ -7,6 +7,7 @@ struct Module {
 
 	virtual void init() = 0;
 	virtual void run() = 0;
+	virtual void learn() {}
 
 private:
 	Module(const Module &);

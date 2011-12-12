@@ -21,6 +21,8 @@ static const uint MaxEval = 100000; ///< max number of evaluations
 static const uint AttackableManhattanDistance = 5; ///< max distance for an ant to trigger theater creation
 static const uint TheaterCoreInfinity = 2; ///< max infinity norm distance for an ant to "belong" to the theater
 static const uint MaxAttackRadius2 = 34; ///< radius up to which we consider attacking an enemy (this is the maximum distance a core ant can possibly attack)
+
+static const float LearnGamma = 1.04;
 //@}
 
 static const float EpsilonValue = 0.0000001;
@@ -38,17 +40,20 @@ struct TacticalSm::Theater {
 	Submap basesm;
 	vector<Location> myants;
 	vector<Location> enemyants;
+	vector<int> enemyantplayers;
 
 	vector<PlayerMove *> mymoves;
 	vector<PlayerMove *> enemymoves;
 	uint myevaluated;
 	uint enemyevaluated;
 
+	uint strategy;
+	vector<uint> antcountsbyplayer;
+
 	Theater(Data & d) {reset(d);}
 
 	void reset(Data & d);
 	void flipsides();
-	bool is_duplicate_mymove(Data & d, uint myidx);
 };
 
 struct TacticalSm::ShadowAnt {
@@ -56,7 +61,30 @@ struct TacticalSm::ShadowAnt {
 	bool hastactical;
 };
 
+enum {
+	MoveSel_MaxMin = 0,
+	MoveSel_MaxAvg,
+	MoveSelCount
+};
+
+struct VsPlayer {
+	float learn_normal[6][6][MoveSelCount];
+	float learn_aggressive[6][6][MoveSelCount];
+
+	VsPlayer() {
+		for (uint mycount = 0; mycount < 6; ++mycount) {
+			for (uint enemycount = 0; enemycount < 6; ++enemycount) {
+				for (uint ms = 0; ms < MoveSelCount; ++ms) {
+					learn_normal[mycount][enemycount][ms] = 1.0;
+					learn_aggressive[mycount][enemycount][ms] = 1.0;
+				}
+			}
+		}
+	}
+};
+
 struct TacticalSm::Data {
+	vector<VsPlayer> vs;
 	vector<ShadowAnt> myshadowants;
 	vector<Theater *> theaters;
 	uint nrmoves;
@@ -117,6 +145,8 @@ struct TacticalSm::Data {
 		}
 		return new Theater(*this);
 	}
+
+	int is_duplicate_move(const vector<PlayerMove *> & moves, uint myidx);
 };
 
 void TacticalSm::Theater::reset(Data & d)
@@ -126,6 +156,8 @@ void TacticalSm::Theater::reset(Data & d)
 	aggressive = false;
 	myants.clear();
 	enemyants.clear();
+	strategy = 0;
+	antcountsbyplayer.clear();
 
 	while (!mymoves.empty()) {
 		d.unusedmoves.push_back(mymoves.back());
@@ -148,30 +180,30 @@ void TacticalSm::Theater::flipsides()
 	swap(myevaluated, enemyevaluated);
 }
 
-bool TacticalSm::Theater::is_duplicate_mymove(Data & d, uint myidx)
+int TacticalSm::Data::is_duplicate_move(const vector<PlayerMove *> & moves, uint myidx)
 {
-	PlayerMove & pm = *mymoves[myidx];
+	PlayerMove & pm = *moves[myidx];
 
-	for (uint idx = 0; idx < mymoves.size(); ++idx) {
+	for (uint idx = 0; idx < moves.size(); ++idx) {
 		if (idx == myidx)
 			continue;
 
-		PlayerMove & other = *mymoves[idx];
+		PlayerMove & other = *moves[idx];
 		if (other.hash != pm.hash)
 			continue;
 
-		d.nrfullduplicatechecks++;
-		for (int idx = 0; idx < Submap::Size * Submap::Size; ++idx) {
-			if (pm.map.map[idx] != other.map.map[idx])
+		nrfullduplicatechecks++;
+		for (int sq = 0; sq < Submap::Size * Submap::Size; ++sq) {
+			if (pm.map.map[sq] != other.map.map[sq])
 				goto notequal;
 		}
-		d.nrfullduplicatesuccess++;
+		nrfullduplicatesuccess++;
 
-		return true;
+		return idx;
 	notequal: ;
 	}
 
-	return false;
+	return -1;
 }
 
 
@@ -321,7 +353,7 @@ struct NewMove {
 		PlayerMove & pm = move();
 		pm.computehash();
 
-		if (th.is_duplicate_mymove(d, th.mymoves.size() - 1)) {
+		if (d.is_duplicate_move(th.mymoves, th.mymoves.size() - 1) >= 0) {
 			state.bug << "New move is equal to an old move" << endl;
 			return;
 		}
@@ -1010,8 +1042,7 @@ void TacticalSm::evaluate_new_moves(uint theateridx)
 
 			state.bug << " " << myidx << " vs. " << enemyidx
 				<< "  value " << myvalue << " vs " << enemyvalue << endl;
-//			if (state.turn == 839)
-//				state.bug << Outcome(th, myidx, enemyidx);
+			state.bug << Outcome(th, myidx, enemyidx);
 
 			mymove.outcomes.push_back(PlayerMove::VsOutcome(myvalue, 0));
 			enemymove.outcomes.push_back(PlayerMove::VsOutcome(enemyvalue, 0));
@@ -1049,13 +1080,25 @@ void TacticalSm::generate_theater(const Location & center)
 			if (!(field & Submap::Ant))
 				continue;
 
+			Location global = state.addLocations(th.offset, local);
+			int antplayer = state.grid[global.row][global.col].ant;
+
+			assert(antplayer >= 0);
+
+			if ((uint)antplayer >= th.antcountsbyplayer.size())
+				th.antcountsbyplayer.resize(antplayer + 1);
+
+			th.antcountsbyplayer[antplayer]++;
+
 			if (field & Submap::Enemy) {
+				assert(antplayer >= 1);
 				th.enemyants.push_back(local);
+				th.enemyantplayers.push_back(antplayer);
 			} else {
 				th.myants.push_back(local);
 
 				if (th.basesm.infinitydist(local, Location(Submap::Radius, Submap::Radius)) <= TheaterCoreInfinity) {
-					uint antidx = bot.myantidx_at(state.addLocations(th.offset, local));
+					uint antidx = bot.myantidx_at(global);
 					d.myshadowants[antidx].hastactical = true;
 				}
 			}
@@ -1087,6 +1130,72 @@ void TacticalSm::generate_theater(const Location & center)
 	}
 
 	th.enemymoves[0]->computehash();
+
+	//
+	choose_strategy(theateridx);
+}
+
+void TacticalSm::choose_strategy(uint theateridx)
+{
+	Theater & th = *d.theaters[theateridx];
+	float weights[MoveSelCount];
+
+	state.bug << "Select strategy for theater " << theateridx << (th.aggressive ? " (aggressive)" : " (normal)");
+
+	for (uint i = 0; i < MoveSelCount; ++i)
+		weights[i] = 0.0;
+
+	uint myantsidx = th.antcountsbyplayer[0];
+	if (myantsidx >= 6)
+		myantsidx = 0;
+
+	if (th.antcountsbyplayer.size() > d.vs.size())
+		d.vs.resize(th.antcountsbyplayer.size() - 1);
+
+	for (uint player = 1; player < th.antcountsbyplayer.size(); ++player) {
+		if (!th.antcountsbyplayer[player])
+			continue;
+
+		uint enemyantsidx = th.antcountsbyplayer[player];
+		if (enemyantsidx >= 6)
+			enemyantsidx = 0;
+
+		state.bug << " (" << player << " " << myantsidx << "v" << enemyantsidx << ":";
+		if (th.aggressive) {
+			for (uint ms = 0; ms < MoveSelCount; ++ms) {
+				float w = d.vs[player-1].learn_aggressive[myantsidx][enemyantsidx][ms];
+				weights[ms] += w;
+				state.bug << " " << w;
+			}
+		} else {
+			for (uint ms = 0; ms < MoveSelCount; ++ms) {
+				float w = d.vs[player-1].learn_normal[myantsidx][enemyantsidx][ms];
+				weights[ms] += w;
+				state.bug << " " << w;
+			}
+		}
+		state.bug << ")";
+	}
+
+	state.bug << "; weights are";
+
+	float totalweight = 0.0;
+
+	for (uint i = 0; i < MoveSelCount; ++i) {
+		totalweight += weights[i];
+		state.bug << " " << weights[i];
+	}
+
+	float r = fastrngd() * totalweight;
+	uint ms = 0;
+	do {
+		r -= weights[ms++];
+	} while (r >= 0.0 && ms < MoveSelCount);
+	ms--;
+
+	th.strategy = ms;
+
+	state.bug << "; choose " << th.strategy << endl;
 }
 
 void TacticalSm::pull_moves(uint theateridx)
@@ -1115,7 +1224,7 @@ void TacticalSm::pull_moves(uint theateridx)
 
 	pm.computehash();
 
-	if (th.is_duplicate_mymove(d, th.mymoves.size() - 1)) {
+	if (d.is_duplicate_move(th.mymoves, th.mymoves.size() - 1) >= 0) {
 		d.unusedmoves.push_back(&pm);
 		th.mymoves.pop_back();
 		state.bug << "  no new moves" << endl;
@@ -1256,7 +1365,13 @@ void TacticalSm::run_theater(uint theateridx)
 	}
 
 	//
-	uint myidx = choose_max_avg_move(theateridx);
+	uint myidx;
+
+	if (th.strategy == MoveSel_MaxMin)
+		myidx = choose_max_min_move(theateridx);
+	else
+		myidx = choose_max_avg_move(theateridx);
+
 	push_moves(theateridx, myidx);
 
 	state.bug << "-----------------------" << endl;
@@ -1343,4 +1458,124 @@ void TacticalSm::run()
 
 	state.bug.time << "Total number of generated moves: " << d.nrmoves << ", evaluated pairs: " << d.nrevals
 		<< ", duplicate checks: " << d.nrfullduplicatesuccess << " / " << d.nrfullduplicatechecks << endl;
+}
+
+struct Matching {
+	struct Ant {
+		Location local;
+		int player;
+		int candidates[6];
+		uint nrcandidates;
+
+		Ant(const Location & loc, int p) :
+			local(loc),
+			player(p),
+			nrcandidates(0)
+		{
+			assert(player >= 1);
+		}
+	};
+
+	vector<Ant> previous;
+	vector<Ant> current;
+};
+
+int TacticalSm::pull_enemy_moves(uint theateridx)
+{
+	Theater & th = *d.theaters[theateridx];
+
+	state.bug << "Theater " << theateridx << ": pulling enemy moves" << endl;
+
+	th.enemymoves.push_back(d.allocmove());
+
+	PlayerMove & pm = *th.enemymoves.back();
+
+	pm.map.fill(0);
+	pm.antmoves.reserve(th.enemyants.size() + 8);
+
+	for (uint idx = 0; idx < state.enemyAnts.size(); ++idx) {
+		const Location & global = state.enemyAnts[idx];
+		Location local = state.addLocations(global, Location(-th.offset.row, -th.offset.col));
+		pm.antmoves.push_back(PlayerMove::AntMove(local, -1));
+		pm.ant_mark(pm.antmoves.size() - 1);
+	}
+
+	Location local;
+	for (local.row = 0; local.row < Submap::Size; ++local.row) {
+		for (local.col = 0; local.col < Submap::Size; ++local.col) {
+			Location global = state.addLocations(local, th.offset);
+			Square & sq = state.grid[global.row][global.col];
+
+			for (uint idx = 0; idx < sq.deadAnts.size(); ++idx) {
+				if (sq.deadAnts[idx] >= 1) {
+					pm.antmoves.push_back(PlayerMove::AntMove(local, -1));
+					pm.ant_mark(pm.antmoves.size() - 1);
+				}
+			}
+		}
+	}
+
+	pm.computehash();
+
+	int duplicate = d.is_duplicate_move(th.enemymoves, th.enemymoves.size() - 1);
+	if (duplicate >= 0) {
+		d.unusedmoves.push_back(&pm);
+		th.enemymoves.pop_back();
+		state.bug << "  is duplicate move" << endl;
+		return duplicate;
+	} else {
+		d.nrmoves++;
+		state.bug.time << "  OUCH: unanticipated enemy move in theater " << theateridx << " ofs " << th.offset << endl;
+		evaluate_new_moves(theateridx);
+		return th.enemymoves.size() - 1;
+	}
+}
+
+void TacticalSm::learn()
+{
+	for (uint theateridx = 0; theateridx < d.theaters.size(); ++theateridx) {
+		Theater & th = *d.theaters[theateridx];
+
+		uint myidx[MoveSelCount];
+		myidx[MoveSel_MaxMin] = choose_max_min_move(theateridx);
+		myidx[MoveSel_MaxAvg] = choose_max_avg_move(theateridx);
+
+
+		int enemyidx = pull_enemy_moves(theateridx);
+		float values[MoveSelCount];
+		float bestmovevalue = numeric_limits<float>::min();
+
+		state.bug << "Actual enemy move was " << enemyidx << "; values";
+
+		for (uint ms = 0; ms < MoveSelCount; ++ms) {
+			PlayerMove & pm = *th.mymoves[myidx[ms]];
+			values[ms] = pm.outcomes[enemyidx].value;
+			state.bug << " " << values[ms];
+			bestmovevalue = max(bestmovevalue, values[ms]);
+		}
+
+		state.bug << endl;
+
+		uint myantsidx = th.antcountsbyplayer[0];
+		if (myantsidx >= 6)
+			myantsidx = 0;
+
+		for (uint player = 1; player < th.antcountsbyplayer.size(); ++player) {
+			if (!th.antcountsbyplayer[player])
+				continue;
+
+			uint enemyantsidx = th.antcountsbyplayer[player];
+			if (enemyantsidx >= 6)
+				enemyantsidx = 0;
+
+			for (uint ms = 0; ms < MoveSelCount; ++ms) {
+				if (values[ms] >= bestmovevalue - EpsilonValue) {
+					if (th.aggressive)
+						d.vs[player-1].learn_aggressive[myantsidx][enemyantsidx][ms] *= LearnGamma;
+					else
+						d.vs[player-1].learn_normal[myantsidx][enemyantsidx][ms] *= LearnGamma;
+				}
+			}
+		}
+	}
 }

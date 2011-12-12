@@ -280,6 +280,8 @@ void Bot::makeMoves()
 
 	d.lastchecktime = -1.0;
 
+	m_tactical.learn();
+
 	m_zoc.update();
 	//m_symmetry.run();
 
