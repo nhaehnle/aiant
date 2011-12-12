@@ -52,9 +52,9 @@ TacticalSmBase::TacticalSmBase(Bot & b) :
 	ValueFoodDist = 0.99;
 	ValueEat = 1.334;
 
-	MinAggressionAnts = 4;
-	AggressionThresholdShift = -6.0;
-	AggressionScale = 1.0;
+	MinAggressionAnts = 2;
+	AggressionThresholdShift = -4.0;
+	AggressionScale = 1.2;
 }
 
 TacticalSmBase::~TacticalSmBase()
