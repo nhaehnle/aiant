@@ -58,11 +58,11 @@ struct BaseSubmap {
 		return pos.row >= 0 && pos.row < Size && pos.col >= 0 && pos.col < Size;
 	}
 	T & operator[](const Location & pos) {
-		assert(inside(pos));
+		//assert(inside(pos));
 		return map[pos.row * Size + pos.col];
 	}
 	const T & operator[](const Location & pos) const {
-		assert(inside(pos));
+		//assert(inside(pos));
 		return map[pos.row * Size + pos.col];
 	}
 	static bool getneighbour(Location local, int direction, Location & out) {
@@ -253,7 +253,7 @@ struct PlayerMove {
 			return;
 
 		uint prevnrants = map[am.pos] >> AntsShift;
-		assert(prevnrants >= 1);
+		//assert(prevnrants >= 1);
 
 		map[am.pos] -= 1 << AntsShift;
 		if (prevnrants == 1) {

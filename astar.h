@@ -21,7 +21,7 @@ struct BaseAStar {
 	}
 
 	Location getsource(const Location & to) const {
-		assert(m_map[to].state == Field::WHITE);
+		//assert(m_map[to].state == Field::WHITE);
 
 		Location cur = to;
 
@@ -33,7 +33,7 @@ struct BaseAStar {
 	}
 
 	int getlaststep(const Location & to) const {
-		assert(m_map[to].state == Field::WHITE);
+		//assert(m_map[to].state == Field::WHITE);
 		return m_map[to].backlink;
 	}
 

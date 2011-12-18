@@ -1,7 +1,6 @@
 #include "scout.h"
 
 #include <algorithm>
-#include <cassert>
 #include <list>
 #include <queue>
 

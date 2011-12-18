@@ -39,7 +39,7 @@ uint FoodSeeker::foodidx_at(const Location & pos)
 {
 	state.bug << "foodidx " << pos << endl;
 
-	assert(state.grid[pos.row][pos.col].isFood);
+	//assert(state.grid[pos.row][pos.col].isFood);
 
 	for (uint idx = 0; idx < d.foods.size(); ++idx) {
 		if (d.foods[idx].where == pos)

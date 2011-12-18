@@ -164,7 +164,7 @@ void Bot::playGame()
 
 uint Bot::myantidx_at(const Location & pos)
 {
-	assert(state.grid[pos.row][pos.col].ant == 0);
+	//assert(state.grid[pos.row][pos.col].ant == 0);
 
 	for (uint idx = 0; idx < m_ants.size(); ++idx) {
 		if (m_ants[idx].where == pos)

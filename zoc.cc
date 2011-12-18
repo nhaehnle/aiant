@@ -1,7 +1,5 @@
 
 #include "zoc.h"
-
-#include <cassert>
 #include <limits>
 
 #include "State.h"

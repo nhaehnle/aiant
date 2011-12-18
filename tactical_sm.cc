@@ -348,7 +348,7 @@ struct NewMove {
 
 	void commit()
 	{
-		assert(!shouldcommit);
+		//assert(!shouldcommit);
 
 		PlayerMove & pm = move();
 		pm.computehash();
@@ -1083,7 +1083,7 @@ void TacticalSm::generate_theater(const Location & center)
 			Location global = state.addLocations(th.offset, local);
 			int antplayer = state.grid[global.row][global.col].ant;
 
-			assert(antplayer >= 0);
+			//assert(antplayer >= 0);
 
 			if ((uint)antplayer >= th.antcountsbyplayer.size())
 				th.antcountsbyplayer.resize(antplayer + 1);
@@ -1091,7 +1091,7 @@ void TacticalSm::generate_theater(const Location & center)
 			th.antcountsbyplayer[antplayer]++;
 
 			if (field & Submap::Enemy) {
-				assert(antplayer >= 1);
+				//assert(antplayer >= 1);
 				th.enemyants.push_back(local);
 				th.enemyantplayers.push_back(antplayer);
 			} else {
@@ -1182,7 +1182,6 @@ void TacticalSm::choose_strategy(uint theateridx)
 	float totalweight = 0.0;
 
 	for (uint i = 0; i < MoveSelCount; ++i) {
-		assert(!isnan(weights[i]));
 		totalweight += weights[i];
 		state.bug << " " << weights[i];
 	}
@@ -1195,7 +1194,6 @@ void TacticalSm::choose_strategy(uint theateridx)
 	ms--;
 
 	th.strategy = ms;
-	assert(th.strategy < MoveSelCount);
 
 	state.bug << "; choose " << th.strategy << endl;
 }
@@ -1317,8 +1315,6 @@ uint TacticalSm::choose_max_avg_move(uint theateridx)
 			bestvalue = value;
 	}
 
-	assert(!isnan(bestvalue));
-
 	//
 	d.tmp_candidates.clear();
 
@@ -1331,7 +1327,7 @@ uint TacticalSm::choose_max_avg_move(uint theateridx)
 		}
 	}
 
-	assert(!d.tmp_candidates.empty());
+	//assert(!d.tmp_candidates.empty());
 
 	uint myidx = d.tmp_candidates[fastrng() % d.tmp_candidates.size()];
 
@@ -1465,26 +1461,6 @@ void TacticalSm::run()
 	state.bug.time << "Total number of generated moves: " << d.nrmoves << ", evaluated pairs: " << d.nrevals
 		<< ", duplicate checks: " << d.nrfullduplicatesuccess << " / " << d.nrfullduplicatechecks << endl;
 }
-
-struct Matching {
-	struct Ant {
-		Location local;
-		int player;
-		int candidates[6];
-		uint nrcandidates;
-
-		Ant(const Location & loc, int p) :
-			local(loc),
-			player(p),
-			nrcandidates(0)
-		{
-			assert(player >= 1);
-		}
-	};
-
-	vector<Ant> previous;
-	vector<Ant> current;
-};
 
 int TacticalSm::pull_enemy_moves(uint theateridx)
 {

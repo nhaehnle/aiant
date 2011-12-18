@@ -297,7 +297,7 @@ void HillDefense::run()
 			}
 		}
 
-		assert(bestdirection != -1);
+		//assert(bestdirection != -1);
 		state.bug << "    defense move: " << cdir(bestdirection) << endl;
 
 		ant.direction = bestdirection;
@@ -312,7 +312,7 @@ uint HillDefense::getnrhills()
 
 const Location & HillDefense::gethill(uint idx)
 {
-	assert(idx < d.hills.size());
+	//assert(idx < d.hills.size());
 	return d.hills[idx]->pos;
 }
 
