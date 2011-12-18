@@ -1182,6 +1182,7 @@ void TacticalSm::choose_strategy(uint theateridx)
 	float totalweight = 0.0;
 
 	for (uint i = 0; i < MoveSelCount; ++i) {
+		assert(!isnan(weights[i]));
 		totalweight += weights[i];
 		state.bug << " " << weights[i];
 	}
@@ -1194,6 +1195,7 @@ void TacticalSm::choose_strategy(uint theateridx)
 	ms--;
 
 	th.strategy = ms;
+	assert(th.strategy < MoveSelCount);
 
 	state.bug << "; choose " << th.strategy << endl;
 }
@@ -1315,6 +1317,8 @@ uint TacticalSm::choose_max_avg_move(uint theateridx)
 			bestvalue = value;
 	}
 
+	assert(!isnan(bestvalue));
+
 	//
 	d.tmp_candidates.clear();
 
@@ -1326,6 +1330,8 @@ uint TacticalSm::choose_max_avg_move(uint theateridx)
 			state.bug << " " << idx;
 		}
 	}
+
+	assert(!d.tmp_candidates.empty());
 
 	uint myidx = d.tmp_candidates[fastrng() % d.tmp_candidates.size()];
 
