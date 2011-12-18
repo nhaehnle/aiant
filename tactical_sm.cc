@@ -66,10 +66,10 @@ enum {
 	MoveSel_MaxAvg,
 	MoveSel_MaxMt5,
 	MoveSel_MaxMt9,
-/*	MoveSel_MaxMt5Mt5,
+	MoveSel_MaxMt5Mt5,
 	MoveSel_MaxMt5Mt9,
 	MoveSel_MaxMt9Mt5,
-	MoveSel_MaxMt9Mt9,*/
+	MoveSel_MaxMt9Mt9,
 	MoveSelCount
 };
 
@@ -1464,10 +1464,10 @@ void TacticalSm::run_theater(uint theateridx)
 	case MoveSel_MaxAvg: myidx = choose_max_avg_move(theateridx); break;
 	case MoveSel_MaxMt5: myidx = choose_max_mt_move(theateridx, 0.5); break;
 	case MoveSel_MaxMt9: myidx = choose_max_mt_move(theateridx, 0.9); break;
-/*	case MoveSel_MaxMt5Mt5: myidx = choose_max_mt_mt_move(theateridx, 0.5, 0.5); break;
+	case MoveSel_MaxMt5Mt5: myidx = choose_max_mt_mt_move(theateridx, 0.5, 0.5); break;
 	case MoveSel_MaxMt5Mt9: myidx = choose_max_mt_mt_move(theateridx, 0.5, 0.9); break;
 	case MoveSel_MaxMt9Mt5: myidx = choose_max_mt_mt_move(theateridx, 0.9, 0.5); break;
-	case MoveSel_MaxMt9Mt9: myidx = choose_max_mt_mt_move(theateridx, 0.9, 0.9); break;*/
+	case MoveSel_MaxMt9Mt9: myidx = choose_max_mt_mt_move(theateridx, 0.9, 0.9); break;
 	}
 
 	push_moves(theateridx, myidx);
@@ -1639,10 +1639,10 @@ void TacticalSm::learn()
 		myidx[MoveSel_MaxAvg] = choose_max_avg_move(theateridx);
 		myidx[MoveSel_MaxMt5] = choose_max_mt_move(theateridx, 0.5);
 		myidx[MoveSel_MaxMt9] = choose_max_mt_move(theateridx, 0.9);
-// 		myidx[MoveSel_MaxMt5Mt5] = choose_max_mt_mt_move(theateridx, 0.5, 0.5);
-// 		myidx[MoveSel_MaxMt5Mt9] = choose_max_mt_mt_move(theateridx, 0.5, 0.9);
-// 		myidx[MoveSel_MaxMt9Mt5] = choose_max_mt_mt_move(theateridx, 0.9, 0.5);
-// 		myidx[MoveSel_MaxMt9Mt9] = choose_max_mt_mt_move(theateridx, 0.9, 0.9);
+		myidx[MoveSel_MaxMt5Mt5] = choose_max_mt_mt_move(theateridx, 0.5, 0.5);
+		myidx[MoveSel_MaxMt5Mt9] = choose_max_mt_mt_move(theateridx, 0.5, 0.9);
+		myidx[MoveSel_MaxMt9Mt5] = choose_max_mt_mt_move(theateridx, 0.9, 0.5);
+		myidx[MoveSel_MaxMt9Mt9] = choose_max_mt_mt_move(theateridx, 0.9, 0.9);
 
 		int enemyidx = pull_enemy_moves(theateridx);
 		float values[MoveSelCount];
