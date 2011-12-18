@@ -41,11 +41,6 @@ struct TacticalSm : TacticalSmBase {
 	void choose_strategy(uint theateridx);
 	uint choose_max_min_move(uint theateridx);
 	uint choose_max_avg_move(uint theateridx);
-	uint choose_max_mt_move(uint theateridx, float threshold);
-	uint choose_max_mt_mt_move(uint theateridx, float threshold1, float threshold2);
-
-	void select_max_min_moves(const std::vector<PlayerMove *> & moves, std::vector<uint> & out, float threshold);
-	void select_max_values(const std::vector<float> & values, std::vector<uint> & out, float threshold);
 
 	Data & d;
 };

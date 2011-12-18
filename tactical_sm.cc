@@ -22,7 +22,7 @@ static const uint AttackableManhattanDistance = 5; ///< max distance for an ant 
 static const uint TheaterCoreInfinity = 2; ///< max infinity norm distance for an ant to "belong" to the theater
 static const uint MaxAttackRadius2 = 34; ///< radius up to which we consider attacking an enemy (this is the maximum distance a core ant can possibly attack)
 
-static const float LearnGamma = 0.93;
+static const float LearnGamma = 1.04;
 //@}
 
 static const float EpsilonValue = 0.0000001;
@@ -64,12 +64,6 @@ struct TacticalSm::ShadowAnt {
 enum {
 	MoveSel_MaxMin = 0,
 	MoveSel_MaxAvg,
-	MoveSel_MaxMt5,
-	MoveSel_MaxMt9,
-	MoveSel_MaxMt5Mt5,
-	MoveSel_MaxMt5Mt9,
-	MoveSel_MaxMt9Mt5,
-	MoveSel_MaxMt9Mt9,
 	MoveSelCount
 };
 
@@ -90,8 +84,6 @@ struct VsPlayer {
 };
 
 struct TacticalSm::Data {
-	uint totallearntheaters;
-	uint bestmscount[MoveSelCount];
 	vector<VsPlayer> vs;
 	vector<ShadowAnt> myshadowants;
 	vector<Theater *> theaters;
@@ -106,12 +98,7 @@ struct TacticalSm::Data {
 	vector<uint> tmp_candidates;
 	vector<float> tmp_values;
 
-	Data() {
-		totallearntheaters = 0;
-		for (uint ms = 0; ms < MoveSelCount; ++ms)
-			bestmscount[ms] = 0;
-		reset();
-	}
+	Data() {reset();}
 	~Data() {
 		reset();
 
@@ -1280,44 +1267,27 @@ bool TacticalSm::get_improve_pair(const vector<PlayerMove *> & moves, uint & myi
 	return false;
 }
 
-void TacticalSm::select_max_min_moves(const std::vector<PlayerMove *> & moves, vector<uint> & out, float threshold)
-{
-	float bestvalue = numeric_limits<float>::min();
-
-	for (uint idx = 0; idx < moves.size(); ++idx)
-		bestvalue = max(bestvalue, moves[idx]->worstvalue);
-
-	for (uint idx = 0; idx < moves.size(); ++idx) {
-		if (moves[idx]->worstvalue >= threshold * bestvalue - EpsilonValue) {
-			out.push_back(idx);
-		}
-	}
-}
-
-void TacticalSm::select_max_values(const std::vector<float> & values, vector<uint> & out, float threshold)
-{
-	float bestvalue = numeric_limits<float>::min();
-
-	for (uint idx = 0; idx < values.size(); ++idx)
-		bestvalue = max(bestvalue, values[idx]);
-
-	for (uint idx = 0; idx < values.size(); ++idx) {
-		if (values[idx] >= threshold * bestvalue - EpsilonValue) {
-			out.push_back(idx);
-		}
-	}
-}
-
 uint TacticalSm::choose_max_min_move(uint theateridx)
 {
 	Theater & th = *d.theaters[theateridx];
 
+	float bestvalue = numeric_limits<float>::min();
+	for (uint idx = 0; idx < th.mymoves.size(); ++idx)
+		bestvalue = max(bestvalue, th.mymoves[idx]->worstvalue);
+
+	state.bug << theateridx << ": best value is " << bestvalue << ", candidates are:";
+
 	d.tmp_candidates.clear();
-	select_max_min_moves(th.mymoves, d.tmp_candidates, 1.0);
+	for (uint idx = 0; idx < th.mymoves.size(); ++idx) {
+		if (th.mymoves[idx]->worstvalue >= bestvalue - EpsilonValue) {
+			d.tmp_candidates.push_back(idx);
+			state.bug << " " << idx;
+		}
+	}
 
 	uint myidx = d.tmp_candidates[fastrng() % d.tmp_candidates.size()];
 
-	state.bug << "Max min choosing " << myidx << endl;
+	state.bug << "; choosing " << myidx << endl;
 
 	return myidx;
 }
@@ -1364,67 +1334,6 @@ uint TacticalSm::choose_max_avg_move(uint theateridx)
 	return myidx;
 }
 
-// assume opponent makes a move within threshold of his max/min, and pick the best response move
-uint TacticalSm::choose_max_mt_move(uint theateridx, float threshold)
-{
-	Theater & th = *d.theaters[theateridx];
-
-	d.tmp_candidates.clear();
-	select_max_min_moves(th.enemymoves, d.tmp_candidates, threshold);
-
-	d.tmp_values.clear();
-	for (uint myidx = 0; myidx < th.mymoves.size(); ++myidx) {
-		PlayerMove & mymove = *th.mymoves[myidx];
-		float worstvalue = numeric_limits<float>::max();
-		for (uint ci = 0; ci < d.tmp_candidates.size(); ++ci) {
-			worstvalue = min(worstvalue, mymove.outcomes[d.tmp_candidates[ci]].value);
-		}
-		d.tmp_values.push_back(worstvalue);
-	}
-
-	d.tmp_candidates.clear();
-	select_max_values(d.tmp_values, d.tmp_candidates, 1.0);
-
-	return d.tmp_candidates[fastrng() % d.tmp_candidates.size()];
-}
-
-// assume opponent chooses his move within threshold1 of his best response to one of our moves within threshold2 of our max/min
-uint TacticalSm::choose_max_mt_mt_move(uint theateridx, float threshold1, float threshold2)
-{
-	Theater & th = *d.theaters[theateridx];
-
-	d.tmp_candidates.clear();
-	select_max_min_moves(th.mymoves, d.tmp_candidates, threshold2);
-
-	d.tmp_values.clear();
-	for (uint enemyidx = 0; enemyidx < th.enemymoves.size(); ++enemyidx) {
-		PlayerMove & enemymove = *th.enemymoves[enemyidx];
-		float worstvalue = numeric_limits<float>::max();
-		for (uint ci = 0; ci < d.tmp_candidates.size(); ++ci) {
-			worstvalue = min(worstvalue, enemymove.outcomes[d.tmp_candidates[ci]].value);
-		}
-		d.tmp_values.push_back(worstvalue);
-	}
-
-	d.tmp_candidates.clear();
-	select_max_values(d.tmp_values, d.tmp_candidates, threshold1);
-
-	d.tmp_values.clear();
-	for (uint myidx = 0; myidx < th.mymoves.size(); ++myidx) {
-		PlayerMove & mymove = *th.mymoves[myidx];
-		float worstvalue = numeric_limits<float>::max();
-		for (uint ci = 0; ci < d.tmp_candidates.size(); ++ci) {
-			worstvalue = min(worstvalue, mymove.outcomes[d.tmp_candidates[ci]].value);
-		}
-		d.tmp_values.push_back(worstvalue);
-	}
-
-	d.tmp_candidates.clear();
-	select_max_values(d.tmp_values, d.tmp_candidates, 1.0);
-
-	return d.tmp_candidates[fastrng() % d.tmp_candidates.size()];
-}
-
 void TacticalSm::run_theater(uint theateridx)
 {
 	state.bug << "Run tactical theater " << theateridx << " (turn " << state.turn << ")" << endl;
@@ -1458,17 +1367,10 @@ void TacticalSm::run_theater(uint theateridx)
 	//
 	uint myidx;
 
-	switch (th.strategy) {
-	default:
-	case MoveSel_MaxMin: myidx = choose_max_min_move(theateridx); break;
-	case MoveSel_MaxAvg: myidx = choose_max_avg_move(theateridx); break;
-	case MoveSel_MaxMt5: myidx = choose_max_mt_move(theateridx, 0.5); break;
-	case MoveSel_MaxMt9: myidx = choose_max_mt_move(theateridx, 0.9); break;
-	case MoveSel_MaxMt5Mt5: myidx = choose_max_mt_mt_move(theateridx, 0.5, 0.5); break;
-	case MoveSel_MaxMt5Mt9: myidx = choose_max_mt_mt_move(theateridx, 0.5, 0.9); break;
-	case MoveSel_MaxMt9Mt5: myidx = choose_max_mt_mt_move(theateridx, 0.9, 0.5); break;
-	case MoveSel_MaxMt9Mt9: myidx = choose_max_mt_mt_move(theateridx, 0.9, 0.9); break;
-	}
+	if (th.strategy == MoveSel_MaxMin)
+		myidx = choose_max_min_move(theateridx);
+	else
+		myidx = choose_max_avg_move(theateridx);
 
 	push_moves(theateridx, myidx);
 
@@ -1637,12 +1539,7 @@ void TacticalSm::learn()
 		uint myidx[MoveSelCount];
 		myidx[MoveSel_MaxMin] = choose_max_min_move(theateridx);
 		myidx[MoveSel_MaxAvg] = choose_max_avg_move(theateridx);
-		myidx[MoveSel_MaxMt5] = choose_max_mt_move(theateridx, 0.5);
-		myidx[MoveSel_MaxMt9] = choose_max_mt_move(theateridx, 0.9);
-		myidx[MoveSel_MaxMt5Mt5] = choose_max_mt_mt_move(theateridx, 0.5, 0.5);
-		myidx[MoveSel_MaxMt5Mt9] = choose_max_mt_mt_move(theateridx, 0.5, 0.9);
-		myidx[MoveSel_MaxMt9Mt5] = choose_max_mt_mt_move(theateridx, 0.9, 0.5);
-		myidx[MoveSel_MaxMt9Mt9] = choose_max_mt_mt_move(theateridx, 0.9, 0.9);
+
 
 		int enemyidx = pull_enemy_moves(theateridx);
 		float values[MoveSelCount];
@@ -1672,26 +1569,13 @@ void TacticalSm::learn()
 				enemyantsidx = 0;
 
 			for (uint ms = 0; ms < MoveSelCount; ++ms) {
-				if (values[ms] < bestmovevalue - EpsilonValue) {
-					float learn = LearnGamma;
-					if (values[ms] < 0.8 * bestmovevalue - EpsilonValue)
-						learn *= LearnGamma;
-
+				if (values[ms] >= bestmovevalue - EpsilonValue) {
 					if (th.aggressive)
-						d.vs[player-1].learn_aggressive[myantsidx][enemyantsidx][ms] *= learn;
+						d.vs[player-1].learn_aggressive[myantsidx][enemyantsidx][ms] *= LearnGamma;
 					else
-						d.vs[player-1].learn_normal[myantsidx][enemyantsidx][ms] *= learn;
-				} else {
-					d.bestmscount[ms]++;
+						d.vs[player-1].learn_normal[myantsidx][enemyantsidx][ms] *= LearnGamma;
 				}
 			}
 		}
-
-		d.totallearntheaters++;
 	}
-
-	state.bug << "Best MoveSels:";
-	for (uint ms = 0; ms < MoveSelCount; ++ms)
-		state.bug << " " << d.bestmscount[ms];
-	state.bug << " (" << d.totallearntheaters << ")" << endl;
 }
