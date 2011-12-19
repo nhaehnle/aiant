@@ -1,0 +1,10 @@
+AI Challenge submission
+Copyright 2011 Nicolai Haehnle <nhaehnle@gmail.com>
+
+Based on the C++ starter package provided by the challenge organizers.
+
+Unless otherwise noted, source code in this project is licensed under the
+Apache license, version 2.0. See the LICENSE file for details.
+
+Testing scripts use the TrueSkill implementation by Doug Zongker, see
+test/trueskill.py.
