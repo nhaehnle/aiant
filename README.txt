@@ -41,3 +41,6 @@ v5.16: disable assertions
 v10 = v5.16
 
 My final submission (version 10 on the contest homepage) is equal to the tag v5.16.
+
+A blog entry describing some of the thoughts behind the bot can be found here:
+http://nhaehnle.blogspot.com/2011/12/ai-challenge-look-back.html
